@@ -1,5 +1,6 @@
 import {
   ArrowUp,
+  Bot,
   Component,
   FileText,
   Github,
@@ -7,16 +8,38 @@ import {
   Monitor,
   Plus,
   Plug,
+  CornerDownRight,
+  Copy,
+  ThumbsUp,
+  ThumbsDown,
+  Undo,
+  ExternalLink,
+  ChevronRight,
   MessageSquare,
-  Search,
   Terminal,
   X,
+  Search,
+  Globe,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { Terminal as XTerm } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
+import { Browser } from "./Browser";
+
+type WorkspaceViewMode = "agent" | "split";
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+  contextFile?: string | null;
+  toolCalls?: Array<{ id: string; label: string; detail: string; status: "done" | "pending" }>;
+};
+
+const CHAT_TAB_ID = "__codegrey_chat__";
+const BROWSER_TAB_ID = "__codegrey_browser__";
 
 export function Workspace({
   workspaceRoot,
@@ -25,6 +48,8 @@ export function Workspace({
   onRequestOpenFolder,
   terminalOpen,
   setTerminalOpen,
+  viewMode,
+  browserTabRequest,
 }: {
   workspaceRoot: string | null;
   selectedFile: string | null;
@@ -32,13 +57,19 @@ export function Workspace({
   onRequestOpenFolder: () => void;
   terminalOpen: boolean;
   setTerminalOpen: (open: boolean) => void;
+  viewMode: WorkspaceViewMode;
+  browserTabRequest?: number;
 }) {
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [fileText, setFileText] = useState<string>("");
   const [monacoLanguage, setMonacoLanguage] = useState<string>("plaintext");
   const [value, setValue] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatTabVisible, setChatTabVisible] = useState(false);
+  const [continuePromptVisible, setContinuePromptVisible] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   const [terminalHeight, setTerminalHeight] = useState(260);
   const [terminals, setTerminals] = useState<Array<{ id: string; title: string }>>([]);
@@ -66,6 +97,13 @@ export function Workspace({
   }, [selectedFile]);
 
   useEffect(() => {
+    if (browserTabRequest && browserTabRequest > 0) {
+      setOpenTabs((prev) => (prev.includes(BROWSER_TAB_ID) ? prev : [...prev, BROWSER_TAB_ID]));
+      setActiveTab(BROWSER_TAB_ID);
+    }
+  }, [browserTabRequest]);
+
+  useEffect(() => {
     let cancelled = false;
     const load = async () => {
       if (!activeTab) {
@@ -73,6 +111,7 @@ export function Workspace({
         setMonacoLanguage("plaintext");
         return;
       }
+      if (activeTab === CHAT_TAB_ID || activeTab === BROWSER_TAB_ID) return;
       const text = await window.codegrey?.workspace?.readFile?.(activeTab);
       if (cancelled) return;
       setFileText(text ?? "");
@@ -124,7 +163,43 @@ export function Workspace({
   }, [activeTab]);
 
   const send = () => {
-    if (!value.trim()) return;
+    const text = value.trim();
+    if (!text) return;
+
+    const sentFromFile = activeTab && activeTab !== CHAT_TAB_ID;
+    const contextFile = sentFromFile ? activeTab : null;
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: text,
+      timestamp: now,
+      contextFile,
+    };
+    const assistantMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: "I have this queued in the workspace thread. Real model streaming will plug into this panel next.",
+      timestamp: now,
+      toolCalls: contextFile
+        ? [
+            {
+              id: crypto.randomUUID(),
+              label: "Context attached",
+              detail: shortName(contextFile),
+              status: "done",
+            },
+          ]
+        : undefined,
+    };
+
+    setMessages((prev) => [...prev, userMessage, assistantMessage]);
+    setChatTabVisible(true);
+    if (sentFromFile) {
+      setContinuePromptVisible(true);
+    } else if (viewMode === "agent") {
+      setActiveTab(CHAT_TAB_ID);
+    }
     setValue("");
   };
 
@@ -355,14 +430,293 @@ export function Workspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terminalOpen]);
 
+  useEffect(() => {
+    if (viewMode === "split" && activeTab === CHAT_TAB_ID) {
+      setActiveTab(openTabs[openTabs.length - 1] ?? null);
+    }
+  }, [activeTab, openTabs, viewMode]);
+
+  useEffect(() => {
+    if (!continuePromptVisible) return;
+    const timer = window.setTimeout(() => setContinuePromptVisible(false), 6000);
+    return () => window.clearTimeout(timer);
+  }, [continuePromptVisible]);
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const openChatTab = () => {
+    setChatTabVisible(true);
+    setActiveTab(CHAT_TAB_ID);
+    setContinuePromptVisible(false);
+  };
+
+  const resetChat = () => {
+    setMessages([]);
+    setContinuePromptVisible(false);
+  };
+
+  const renderWelcome = () => (
+    <div className="workspace-centered">
+      <div className="workspace-hero">
+        <img
+          src="/logos/no_card_white.svg"
+          alt="Codegrey"
+          className="workspace-logo"
+        />
+        <h1 className="workspace-title">Codegrey</h1>
+
+        <div className="shortcuts-list">
+          <div className="shortcut-item">
+            <span>Switch to Agent Manager</span>
+            <div className="shortcut-keys">
+              <kbd className="kbd">Ctrl</kbd>
+              <span>+</span>
+              <kbd className="kbd">E</kbd>
+            </div>
+          </div>
+          <div className="shortcut-item">
+            <span>Code with Agent</span>
+            <div className="shortcut-keys">
+              <kbd className="kbd">Ctrl</kbd>
+              <span>+</span>
+              <kbd className="kbd">L</kbd>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderChatTimeline = (placement: "tab" | "panel") => (
+    <section className="workspace-chat" data-placement={placement} aria-label="Workspace chat">
+      {placement === "panel" && (
+        <div className="workspace-chat-header">
+          <div>
+            <span>Agent</span>
+            <small>{messages.length ? `${messages.length} messages` : "No messages yet"}</small>
+          </div>
+          <button className="chat-header-btn" type="button" data-tooltip="New chat" onClick={resetChat}>
+            <Plus size={14} />
+          </button>
+        </div>
+      )}
+
+      <div className="workspace-chat-messages" ref={chatScrollRef}>
+        {messages.length === 0 ? (
+          <div className="chat-empty-state">
+            <span>Start a thread from any file.</span>
+            <small>Messages, tool calls, and approvals will appear here.</small>
+          </div>
+        ) : (
+          messages.map((message) => (
+            <article key={message.id} className="chat-message" data-role={message.role}>
+
+
+              {message.role === "user" ? (
+                <div className="user-message-card">
+                  <div className="user-message-content">
+                    {message.contextFile ? (
+                      <div className="chat-context-chip">
+                        <FileText size={12} />
+                        <span>{shortName(message.contextFile)}</span>
+                      </div>
+                    ) : null}
+                    <p>{message.content}</p>
+                  </div>
+                  <button type="button" className="user-undo-btn">
+                    <Undo size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div className="assistant-message-body">
+                  <div className="assistant-status-line">
+                    <span>Worked for 24s</span>
+                    <ChevronRight size={14} />
+                  </div>
+                  <div className="assistant-content">
+                    <p>{message.content}</p>
+                    {message.toolCalls?.length ? (
+                      <div className="chat-tool-list">
+                        {message.toolCalls.map((tool) => (
+                          <div key={tool.id} className="chat-tool-card">
+                            <Component size={13} />
+                            <span>{tool.label}</span>
+                            <small>{tool.detail}</small>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  {message.role === "assistant" && (
+                    <div className="assistant-actions-bottom">
+                      <button type="button" className="action-tiny-btn"><ExternalLink size={14} /></button>
+                      <button type="button" className="action-tiny-btn"><Copy size={14} /></button>
+                      <button type="button" className="action-tiny-btn"><ThumbsUp size={14} /></button>
+                      <button type="button" className="action-tiny-btn"><ThumbsDown size={14} /></button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </article>
+          ))
+        )}
+      </div>
+
+      {placement === "panel" ? renderComposer("panel") : null}
+    </section>
+  );
+
+  const renderComposer = (placement: "float" | "panel") => {
+    const s = placement === "panel" ? 14 : 16;
+    const ts = placement === "panel" ? 12 : 14;
+    const placeholder = placement === "panel" 
+      ? "Ask anything..." 
+      : "Ask me to build a feature, debug a problem, or explain your code...";
+
+    return (
+      <div className="chat-input-wrapper" data-placement={placement}>
+        {placement === "float" && continuePromptVisible && (
+          <div className="chat-input-header-pill">
+            <button
+              className="continue-chat-pill-attached"
+              type="button"
+              onClick={openChatTab}
+            >
+              <CornerDownRight size={12} />
+              <span>Continue in Chat</span>
+            </button>
+          </div>
+        )}
+        <div className="chat-input-card">
+          <div className="chat-input-top">
+            <textarea
+              ref={taRef}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder={placeholder}
+              rows={1}
+              className="chat-textarea"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+            />
+          </div>
+          <div className="chat-input-actions-row">
+            <div className="action-group">
+              <button className="icon-btn" data-tooltip="Coming Soon" type="button">
+                <Plus size={s} />
+              </button>
+              <button className="icon-btn" data-tooltip="Coming Soon" type="button">
+                <Github size={s} />
+              </button>
+              <button className="icon-btn" data-tooltip="Coming Soon" type="button">
+                <Monitor size={s} />
+              </button>
+            </div>
+            <div className="action-group">
+              <button className="icon-btn" data-tooltip="Coming Soon" type="button">
+                <MessageSquare size={s} />
+              </button>
+              <button className="icon-btn" data-tooltip="Coming Soon" type="button">
+                <Mic size={s} />
+              </button>
+              <button className="submit-btn" disabled={!value.trim()} type="button" onClick={send}>
+                <ArrowUp size={s} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="chat-tray">
+          <button className="tray-btn" type="button">
+            <Plug size={ts} />
+            <span>Connect your tools</span>
+          </button>
+
+          <div className="tray-right">
+            <div className="mcp-icons">
+              <div className="mcp-icon" style={{ zIndex: 5 }}>
+                <Component size={ts} />
+              </div>
+              <div className="mcp-icon" style={{ marginLeft: "-6px", zIndex: 4 }}>
+                <Component size={ts} />
+              </div>
+              <div className="mcp-icon" style={{ marginLeft: "-6px", zIndex: 3 }}>
+                <Component size={ts} />
+              </div>
+            </div>
+            <button className="dismiss-btn" type="button">
+              <X size={ts} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderEditorContent = () => {
+    if (activeTab === CHAT_TAB_ID) return renderChatTimeline("tab");
+    if (activeTab === BROWSER_TAB_ID) {
+      return (
+        <Browser 
+          onClose={() => {
+            setOpenTabs(prev => prev.filter(t => t !== BROWSER_TAB_ID));
+            if (activeTab === BROWSER_TAB_ID) setActiveTab(openTabs[openTabs.length - 1] ?? null);
+          }} 
+        />
+      );
+    }
+    if (!workspaceRoot) return renderWelcome();
+    if (!activeTab) return renderWelcome();
+
+    return (
+      <div className="editor-pane">
+        <div className="monaco-wrap" aria-label="File editor">
+          <Editor
+            value={fileText}
+            language={monacoLanguage}
+            theme="codegrey-dark"
+            options={{
+              readOnly: false,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              fontSize: 12,
+              lineHeight: 18,
+              fontFamily:
+                'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+              lineNumbers: "on",
+              glyphMargin: true,
+              folding: true,
+              renderLineHighlight: "line",
+              roundedSelection: true,
+              automaticLayout: true,
+              tabSize: 2,
+            }}
+            onMount={handleEditorDidMount}
+          />
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="ide-shell">
-      <div className="ide-editor">
-        <div className="editor-tabs">
+    <div className="ide-shell" data-view-mode={viewMode}>
+      <div className="ide-workspace-body">
+        <div className="ide-editor">
+          <div className="editor-tabs">
           {openTabs.map((tab) => {
+            const isBrowser = tab === BROWSER_TAB_ID;
             const parts = tab.split(/[/\\]/);
-            const name = parts[parts.length - 1] ?? tab;
-            const icon = getFileIcon(name);
+            const name = isBrowser ? "Browser" : (parts[parts.length - 1] ?? tab);
+            const icon = isBrowser ? null : getFileIcon(name);
+            
             return (
               <button
                 key={tab}
@@ -372,12 +726,16 @@ export function Workspace({
                 onClick={() => setActiveTab(tab)}
                 data-tooltip={tab}
               >
-                <span 
-                  className="seti-icon" 
-                  style={{ color: icon.color, marginRight: 8 }}
-                >
-                  {icon.char}
-                </span>
+                {isBrowser ? (
+                  <Globe size={14} style={{ marginRight: 8, color: 'var(--muted-strong)' }} />
+                ) : (
+                  <span 
+                    className="seti-icon" 
+                    style={{ color: icon?.color, marginRight: 8 }}
+                  >
+                    {icon?.char}
+                  </span>
+                )}
                 <span>{name}</span>
                 <X 
                   size={14} 
@@ -387,7 +745,9 @@ export function Workspace({
                     setOpenTabs((prev) => {
                       const next = prev.filter(t => t !== tab);
                       if (tab === activeTab) {
-                        setActiveTab(next[next.length - 1] || null);
+                        const lastIndex = prev.indexOf(tab);
+                        const nextTab = next[lastIndex] || next[lastIndex - 1] || null;
+                        setActiveTab(nextTab);
                       }
                       return next;
                     });
@@ -396,172 +756,41 @@ export function Workspace({
               </button>
             );
           })}
+          {viewMode === "agent" && chatTabVisible ? (
+            <button
+              type="button"
+              className="editor-tab"
+              data-active={activeTab === CHAT_TAB_ID}
+              onClick={openChatTab}
+              data-tooltip="Workspace chat"
+            >
+              <MessageSquare size={14} />
+              <span>Chat</span>
+              <X
+                size={14}
+                className="tab-close"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setChatTabVisible(false);
+                  if (activeTab === CHAT_TAB_ID) setActiveTab(openTabs[openTabs.length - 1] ?? null);
+                }}
+              />
+            </button>
+          ) : null}
           <button className="tabs-plus-btn" type="button" data-tooltip="New File">
             <Plus size={16} />
           </button>
 
-        </div>
+          </div>
 
-        <div className="editor-surface">
-          {!workspaceRoot ? (
-            <div className="workspace-centered">
-              <div className="workspace-hero">
-                <img
-                  src="/logos/no_card_white.svg"
-                  alt="Codegrey"
-                  className="workspace-logo"
-                />
-                <h1 className="workspace-title">Codegrey</h1>
+          <div className="editor-surface">
+            {renderEditorContent()}
 
-                <div className="shortcuts-list">
-                  <div className="shortcut-item">
-                    <span>Switch to Agent Manager</span>
-                    <div className="shortcut-keys">
-                      <kbd className="kbd">Ctrl</kbd>
-                      <span>+</span>
-                      <kbd className="kbd">E</kbd>
-                    </div>
-                  </div>
-                  <div className="shortcut-item">
-                    <span>Code with Agent</span>
-                    <div className="shortcut-keys">
-                      <kbd className="kbd">Ctrl</kbd>
-                      <span>+</span>
-                      <kbd className="kbd">L</kbd>
-                    </div>
-                  </div>
-                </div>
-
+            {viewMode === "agent" ? (
+              <div className="ide-composer-float" style={{ bottom: terminalOpen ? terminalHeight : 0 }}>
+                {renderComposer("float")}
               </div>
-            </div>
-          ) : activeTab ? (
-            <div className="editor-pane">
-              <div className="monaco-wrap" aria-label="File editor">
-                <Editor
-                  value={fileText}
-                  language={monacoLanguage}
-                  theme="codegrey-dark"
-                  options={{
-                    readOnly: false,
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    fontSize: 12,
-                    lineHeight: 18,
-                    fontFamily:
-                      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                    lineNumbers: "on",
-                    glyphMargin: true,
-                    folding: true,
-                    renderLineHighlight: "line",
-                    roundedSelection: true,
-                    automaticLayout: true,
-                    tabSize: 2,
-                  }}
-                  onMount={handleEditorDidMount}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="workspace-centered">
-              <div className="workspace-hero">
-                <img
-                  src="/logos/no_card_white.svg"
-                  alt="Codegrey"
-                  className="workspace-logo"
-                />
-                <h1 className="workspace-title">Codegrey</h1>
-
-                <div className="shortcuts-list">
-                  <div className="shortcut-item">
-                    <span>Switch to Agent Manager</span>
-                    <div className="shortcut-keys">
-                      <kbd className="kbd">Ctrl</kbd>
-                      <span>+</span>
-                      <kbd className="kbd">E</kbd>
-                    </div>
-                  </div>
-                  <div className="shortcut-item">
-                    <span>Code with Agent</span>
-                    <div className="shortcut-keys">
-                      <kbd className="kbd">Ctrl</kbd>
-                      <span>+</span>
-                      <kbd className="kbd">L</kbd>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="ide-composer-float" style={{ bottom: terminalOpen ? terminalHeight : 0 }}>
-            <div className="chat-input-wrapper">
-              <div className="chat-input-card">
-                <div className="chat-input-top">
-                  <textarea
-                    ref={taRef}
-                    value={value}
-                    onChange={(e) => setValue(e.target.value)}
-                    placeholder="Tasks are independent for focus. Use project instructions and files for shared context."
-                    rows={1}
-                    className="chat-textarea"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        send();
-                      }
-                    }}
-                  />
-                </div>
-                <div className="chat-input-actions-row">
-                  <div className="action-group">
-                    <button className="icon-btn" data-tooltip="Coming Soon" type="button">
-                      <Plus size={16} />
-                    </button>
-                    <button className="icon-btn" data-tooltip="Coming Soon" type="button">
-                      <Github size={16} />
-                    </button>
-                    <button className="icon-btn" data-tooltip="Coming Soon" type="button">
-                      <Monitor size={16} />
-                    </button>
-                  </div>
-                  <div className="action-group">
-                    <button className="icon-btn" data-tooltip="Coming Soon" type="button">
-                      <MessageSquare size={16} />
-                    </button>
-                    <button className="icon-btn" data-tooltip="Coming Soon" type="button">
-                      <Mic size={16} />
-                    </button>
-                    <button className="submit-btn" disabled={!value.trim()} type="button" onClick={send}>
-                      <ArrowUp size={16} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="chat-tray">
-                <button className="tray-btn" type="button">
-                  <Plug size={14} />
-                  <span>Connect your tools</span>
-                </button>
-
-                <div className="tray-right">
-                  <div className="mcp-icons">
-                    <div className="mcp-icon" style={{ zIndex: 5 }}>
-                      <Component size={14} />
-                    </div>
-                    <div className="mcp-icon" style={{ marginLeft: "-6px", zIndex: 4 }}>
-                      <Component size={14} />
-                    </div>
-                    <div className="mcp-icon" style={{ marginLeft: "-6px", zIndex: 3 }}>
-                      <Component size={14} />
-                    </div>
-                  </div>
-                  <button className="dismiss-btn" type="button">
-                    <X size={14} />
-                  </button>
-                </div>
-              </div>
-            </div>
+            ) : null}
           </div>
 
           <div
@@ -634,9 +863,20 @@ export function Workspace({
             </div>
           </div>
         </div>
+
+        {viewMode === "split" ? (
+          <aside className="workspace-chat-panel">
+            {renderChatTimeline("panel")}
+          </aside>
+        ) : null}
       </div>
     </div>
   );
+}
+
+function shortName(filePath: string) {
+  const parts = filePath.split(/[/\\]/);
+  return parts[parts.length - 1] || filePath;
 }
 
 function inferLanguage(filePath: string) {

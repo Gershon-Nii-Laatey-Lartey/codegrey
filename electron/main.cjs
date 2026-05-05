@@ -131,6 +131,7 @@ function createWindow() {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      webviewTag: true,
     },
   });
 
@@ -139,9 +140,14 @@ function createWindow() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => writeWindowState(win), 250);
   };
+  const sendWindowMaximized = () => {
+    win.webContents.send("window:maximized-changed", win.isMaximized());
+  };
 
   win.on("move", queueWindowStateSave);
   win.on("resize", queueWindowStateSave);
+  win.on("maximize", sendWindowMaximized);
+  win.on("unmaximize", sendWindowMaximized);
   win.on("close", () => {
     clearTimeout(saveTimer);
     writeWindowState(win);
@@ -389,13 +395,19 @@ app.whenReady().then(() => {
 
   ipcMain.handle("window:toggle-maximize", (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
-    if (!win) return;
+    if (!win) return false;
 
     if (win.isMaximized()) {
       win.unmaximize();
     } else {
       win.maximize();
     }
+
+    return win.isMaximized();
+  });
+
+  ipcMain.handle("window:is-maximized", (event) => {
+    return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false;
   });
 
   ipcMain.handle("window:close", (event) => {

@@ -5,7 +5,9 @@ interface Window {
     platform: string;
     windowControls?: {
       minimize: () => Promise<void>;
-      toggleMaximize: () => Promise<void>;
+      toggleMaximize: () => Promise<boolean>;
+      isMaximized: () => Promise<boolean>;
+      onMaximizedChange: (handler: (isMaximized: boolean) => void) => () => void;
       close: () => Promise<void>;
     };
     workspace?: {

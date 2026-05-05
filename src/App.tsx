@@ -1,4 +1,5 @@
 import {
+  Copy,
   Minus,
   Square,
   X,
@@ -19,6 +20,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { Onboarding, type WorkspaceMode } from "./pages/Onboarding";
 import { Workspace } from "./pages/Workspace";
+import { Browser } from "./pages/Browser";
 
 const getFileIcon = (fileName: string, isDir?: boolean) => {
   if (isDir) return { char: '\uE024', color: '#d4d7d6' };
@@ -71,11 +73,19 @@ const McpIcon = ({ size = 18 }: { size?: number }) => (
 
 export function App() {
   const [view, setView] = useState<"onboarding" | "workspace">("onboarding");
+  const [browserTabRequest, setBrowserTabRequest] = useState(0);
   const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [workspaceViewMode, setWorkspaceViewMode] = useState<"agent" | "split">("agent");
+  const [windowMaximized, setWindowMaximized] = useState(false);
 
   const toggleTerminal = () => setTerminalOpen(!terminalOpen);
+  const toggleWorkspaceViewMode = () => setWorkspaceViewMode((mode) => (mode === "agent" ? "split" : "agent"));
+  const toggleWindowMaximize = async () => {
+    const isMaximized = await window.codegrey?.windowControls?.toggleMaximize?.();
+    if (typeof isMaximized === "boolean") setWindowMaximized(isMaximized);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +97,22 @@ export function App() {
     load();
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.codegrey?.windowControls?.isMaximized?.().then((isMaximized) => {
+      if (!cancelled) setWindowMaximized(isMaximized);
+    });
+
+    const unsubscribe = window.codegrey?.windowControls?.onMaximizedChange?.((isMaximized) => {
+      setWindowMaximized(isMaximized);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
     };
   }, []);
 
@@ -151,7 +177,7 @@ export function App() {
             tooltip.style.visibility = 'visible';
             tooltip.style.left = `${e.clientX + 20}px`;
             tooltip.style.top = `${e.clientY + 20}px`;
-          }, 1200); // Significantly increased delay for a very intentional feel
+          }, 400); 
           return;
         }
       }
@@ -211,7 +237,6 @@ export function App() {
                 <>
                   <p className="sidebar-message">You have not yet opened a folder.</p>
                   <button className="sidebar-btn sidebar-btn-primary" onClick={openFolder}>
-                    <FolderOpen size={14} style={{ marginRight: 8 }} />
                     Open Folder
                   </button>
                   <button className="sidebar-btn sidebar-btn-secondary">Clone Repository</button>
@@ -263,11 +288,19 @@ export function App() {
         </aside>
       )}
 
-      <div className="main-content-card">
+      <div
+        className="main-content-card"
+        data-view-mode={view === "workspace" ? workspaceViewMode : undefined}
+      >
         <header className="title-bar">
           {view === "workspace" && (
             <div className="title-bar-actions">
-              <button className="title-action-btn" type="button" data-tooltip="Open Browser">
+              <button 
+                className="title-action-btn" 
+                type="button" 
+                data-tooltip="Open Browser"
+                onClick={() => setBrowserTabRequest(c => c + 1)}
+              >
                 <Globe size={15} />
               </button>
               <button 
@@ -278,7 +311,13 @@ export function App() {
               >
                 <Terminal size={15} />
               </button>
-              <button className="title-action-btn" type="button" data-tooltip="Split Editor">
+              <button
+                className="title-action-btn"
+                type="button"
+                data-active={workspaceViewMode === "split" ? "true" : "false"}
+                data-tooltip={workspaceViewMode === "agent" ? "Switch to Split View" : "Switch to Agent View"}
+                onClick={toggleWorkspaceViewMode}
+              >
                 <Columns size={15} />
               </button>
               <button className="title-action-btn" type="button" data-tooltip="Run Code">
@@ -297,10 +336,10 @@ export function App() {
             </button>
             <button
               type="button"
-              aria-label="Maximize"
-              onClick={() => (window as any).codegrey?.windowControls?.toggleMaximize()}
+              aria-label={windowMaximized ? "Restore" : "Maximize"}
+              onClick={toggleWindowMaximize}
             >
-              <Square size={13} aria-hidden="true" />
+              {windowMaximized ? <Copy size={13} aria-hidden="true" /> : <Square size={13} aria-hidden="true" />}
             </button>
             <button
               className="close-control"
@@ -330,6 +369,8 @@ export function App() {
               onRequestOpenFolder={openFolder}
               terminalOpen={terminalOpen}
               setTerminalOpen={setTerminalOpen}
+              viewMode={workspaceViewMode}
+              browserTabRequest={browserTabRequest}
             />
           )}
         </main>

@@ -5,6 +5,12 @@ contextBridge.exposeInMainWorld("codegrey", {
   windowControls: {
     minimize: () => ipcRenderer.invoke("window:minimize"),
     toggleMaximize: () => ipcRenderer.invoke("window:toggle-maximize"),
+    isMaximized: () => ipcRenderer.invoke("window:is-maximized"),
+    onMaximizedChange: (handler) => {
+      const listener = (_event, isMaximized) => handler(isMaximized);
+      ipcRenderer.on("window:maximized-changed", listener);
+      return () => ipcRenderer.removeListener("window:maximized-changed", listener);
+    },
     close: () => ipcRenderer.invoke("window:close"),
   },
   workspace: {
