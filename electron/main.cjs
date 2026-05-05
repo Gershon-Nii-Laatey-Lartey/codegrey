@@ -232,7 +232,9 @@ app.whenReady().then(() => {
 
   function getDefaultShell() {
     if (process.platform === "win32") {
-      return process.env.ComSpec ? process.env.Comspec : "powershell.exe";
+      // Prefer PowerShell 7 if installed; VS Code typically uses pwsh when available.
+      // Fall back to Windows PowerShell.
+      return "pwsh.exe";
     }
     return process.env.SHELL || "/bin/bash";
   }
@@ -247,9 +249,80 @@ app.whenReady().then(() => {
     const cols = Number(opts?.cols) > 0 ? Number(opts.cols) : 80;
     const rows = Number(opts?.rows) > 0 ? Number(opts.rows) : 24;
     const cwd = typeof opts?.cwd === "string" && opts.cwd.trim() ? opts.cwd : (workspaceRoot || app.getPath("home"));
-    const shellPath = typeof opts?.shell === "string" && opts.shell.trim() ? opts.shell : getDefaultShell();
+    let shellPath = typeof opts?.shell === "string" && opts.shell.trim() ? opts.shell : getDefaultShell();
+    let shellArgs = [];
 
-    const p = pty.spawn(shellPath, [], {
+    // Match VS Code-like interactive prompt coloring on Windows (PSReadLine syntax colors).
+    // This is implemented by the shell, not xterm. We set it up defensively if PSReadLine exists.
+    if (process.platform === "win32") {
+      const lower = String(shellPath).toLowerCase();
+      if (lower.endsWith("pwsh.exe") || lower.endsWith("powershell.exe")) {
+        const psInit = [
+          "Import-Module PSReadLine -ErrorAction SilentlyContinue;",
+          "if (Get-Module PSReadLine) {",
+          "  $cmd = Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue;",
+          "  if ($cmd) {",
+          "    $p = $cmd.Parameters;",
+          "    $opts = @{ BellStyle = 'None'; HistoryNoDuplicates = $true };",
+          "    if ($p -and $p.ContainsKey('PredictionSource')) { $opts.PredictionSource = 'History' }",
+          "    try { Set-PSReadLineOption @opts } catch {}",
+          "    try {",
+          "      # Use VT yellow for commands without remapping the whole terminal blue palette.",
+          "      Set-PSReadLineOption -Colors @{",
+          "        Command = \"`e[93m\";",
+          "        Parameter = 'DarkGray';",
+          "        Operator = 'DarkGray';",
+          "        String = 'Green';",
+          "        Number = 'Magenta';",
+          "        Variable = 'White';",
+          "        Type = 'DarkGray';",
+          "        Member = 'DarkGray';",
+          "        Emphasis = 'White';",
+          "        Error = 'Red'",
+          "      }",
+          "    } catch {}",
+          "  }",
+          "}",
+        ].join(" ");
+        shellArgs = [
+          "-NoLogo",
+          "-NoExit",
+          "-Command",
+          psInit,
+        ];
+      }
+    }
+
+    // If pwsh isn't available, node-pty will throw. Fall back to Windows PowerShell.
+    if (process.platform === "win32" && String(shellPath).toLowerCase() === "pwsh.exe") {
+      try {
+        // Cheap existence check
+        require("node:child_process").execFileSync("where", ["pwsh"], { stdio: "ignore" });
+      } catch {
+        shellPath = "powershell.exe";
+        const psInitFallback = [
+          "Import-Module PSReadLine -ErrorAction SilentlyContinue;",
+          "if (Get-Module PSReadLine) {",
+          "  $cmd = Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue;",
+          "  if ($cmd) {",
+          "    $p = $cmd.Parameters;",
+          "    $opts = @{ BellStyle = 'None'; HistoryNoDuplicates = $true };",
+          "    if ($p -and $p.ContainsKey('PredictionSource')) { $opts.PredictionSource = 'History' }",
+          "    try { Set-PSReadLineOption @opts } catch {}",
+          "    try { Set-PSReadLineOption -Colors @{ Command = \"`e[93m\"; Parameter = 'DarkGray'; Operator = 'DarkGray'; String = 'Green'; Number = 'Magenta'; Variable = 'White'; Type = 'DarkGray'; Member = 'DarkGray'; Emphasis = 'White'; Error = 'Red' } } catch {}",
+          "  }",
+          "}",
+        ].join(" ");
+        shellArgs = [
+          "-NoLogo",
+          "-NoExit",
+          "-Command",
+          psInitFallback,
+        ];
+      }
+    }
+
+    const p = pty.spawn(shellPath, shellArgs, {
       name: "xterm-256color",
       cols,
       rows,

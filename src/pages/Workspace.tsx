@@ -41,13 +41,23 @@ export function Workspace({
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   const [terminalHeight, setTerminalHeight] = useState(260);
-  const terminalIdRef = useRef<string | null>(null);
-  const terminalIdState = useRef<string | null>(null);
-  const terminalWrapRef = useRef<HTMLDivElement | null>(null);
-  const xtermRef = useRef<XTerm | null>(null);
-  const fitRef = useRef<FitAddon | null>(null);
+  const [terminals, setTerminals] = useState<Array<{ id: string; title: string }>>([]);
+  const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
+  const terminalViewportRef = useRef<HTMLDivElement | null>(null);
+  const terminalInstancesRef = useRef(
+    new Map<
+      string,
+      {
+        term: XTerm;
+        fit: FitAddon;
+        wrap: HTMLDivElement;
+        title: string;
+      }
+    >()
+  );
   const isResizingRef = useRef(false);
-  const terminalCreatingRef = useRef(false);
+  const terminalSeqRef = useRef(0);
+  const pendingFitRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!selectedFile) return;
@@ -87,18 +97,15 @@ export function Workspace({
       const height = window.innerHeight - e.clientY;
       const newHeight = Math.min(Math.max(120, height), window.innerHeight * 0.8);
       setTerminalHeight(newHeight);
-      fitRef.current?.fit();
+      if (activeTerminalId) {
+        terminalInstancesRef.current.get(activeTerminalId)?.fit.fit();
+      }
     };
 
     const onMouseUp = () => {
       if (isResizingRef.current) {
         isResizingRef.current = false;
-        // Notify backend of final resize
-        const id = terminalIdRef.current;
-        const term = xtermRef.current;
-        if (id && term) {
-          void window.codegrey?.terminal?.resize({ id, cols: term.cols, rows: term.rows });
-        }
+        void resizeActiveTerminal();
       }
     };
 
@@ -108,7 +115,7 @@ export function Workspace({
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, []);
+  }, [activeTerminalId]);
 
   const activeName = useMemo(() => {
     if (!activeTab) return "";
@@ -143,146 +150,210 @@ export function Workspace({
     monaco.editor.setTheme("codegrey-dark");
   };
 
-  const ensureTerminal = async () => {
-    if (terminalIdRef.current || terminalCreatingRef.current) return terminalIdRef.current;
-    
-    const wrap = terminalWrapRef.current;
-    if (!wrap) return null;
+  const requestFitActive = () => {
+    if (pendingFitRef.current) window.cancelAnimationFrame(pendingFitRef.current);
+    pendingFitRef.current = window.requestAnimationFrame(() => {
+      pendingFitRef.current = null;
+      if (!terminalOpen) return;
+      const active = activeTerminalId;
+      if (!active) return;
+      const inst = terminalInstancesRef.current.get(active);
+      if (!inst) return;
+      inst.fit.fit();
+      void window.codegrey?.terminal?.resize({ id: active, cols: inst.term.cols, rows: inst.term.rows });
+    });
+  };
 
-    terminalCreatingRef.current = true;
-    try {
-      // Clear previous instance just in case
-      wrap.innerHTML = "";
+  const resizeActiveTerminal = async () => {
+    const active = activeTerminalId;
+    if (!active) return;
+    const inst = terminalInstancesRef.current.get(active);
+    if (!inst) return;
+    inst.fit.fit();
+    await window.codegrey?.terminal?.resize({ id: active, cols: inst.term.cols, rows: inst.term.rows });
+  };
 
-      const term = new XTerm({
-        cursorBlink: true,
-        fontSize: 12,
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-        theme: {
-          background: "#151515",
-          foreground: "#f4f4f1",
-          cursor: "#74a8ff",
-          selectionBackground: "#2b355f",
-          black: "#151515",
-          red: "#cc3e44",
-          green: "#8dc149",
-          yellow: "#cbcb41",
-          blue: "#519aba",
-          magenta: "#a074c4",
-          cyan: "#85a7a5",
-          white: "#d4d7d6",
-          brightBlack: "#4d5a5e",
-          brightRed: "#cc3e44",
-          brightGreen: "#8dc149",
-          brightYellow: "#cbcb41",
-          brightBlue: "#519aba",
-          brightMagenta: "#a074c4",
-          brightCyan: "#85a7a5",
-          brightWhite: "#e3e4e2",
-        },
-      });
-      const fit = new FitAddon();
-      term.loadAddon(fit);
-      term.open(wrap);
-      fit.fit();
+  const createTerminal = async () => {
+    const viewport = terminalViewportRef.current;
+    if (!viewport) return null;
 
-      xtermRef.current = term;
-      fitRef.current = fit;
+    const term = new XTerm({
+      cursorBlink: true,
+      fontSize: 12,
+      fontFamily:
+        'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+      drawBoldTextInBrightColors: true,
+      theme: {
+        // VS Code Dark+ style ANSI palette (matches typical integrated terminal colors)
+        background: "#151515",
+        foreground: "#cccccc",
+        cursor: "#cccccc",
+        selectionBackground: "#264f78",
+        black: "#000000",
+        red: "#cd3131",
+        green: "#0dbc79",
+        yellow: "#e5e510",
+        blue: "#2472c8",
+        magenta: "#bc3fbc",
+        cyan: "#11a8cd",
+        white: "#e5e5e5",
+        brightBlack: "#666666",
+        brightRed: "#f14c4c",
+        brightGreen: "#23d18b",
+        brightYellow: "#f5f543",
+        brightBlue: "#3b8eea",
+        brightMagenta: "#d670d6",
+        brightCyan: "#29b8db",
+        brightWhite: "#e5e5e5",
+      },
+    });
 
-      const created = await window.codegrey?.terminal?.create({
-        cols: term.cols || 80,
-        rows: term.rows || 24,
-        cwd: workspaceRoot ?? undefined,
-      });
+    const fit = new FitAddon();
+    term.loadAddon(fit);
 
-      if (!created?.id) {
-        term.dispose();
-        return null;
+    const wrap = document.createElement("div");
+    wrap.className = "terminal-instance";
+    viewport.appendChild(wrap);
+
+    term.open(wrap);
+    fit.fit();
+
+    const created = await window.codegrey?.terminal?.create({
+      cols: term.cols || 80,
+      rows: term.rows || 24,
+      cwd: workspaceRoot ?? undefined,
+    });
+
+    if (!created?.id) {
+      wrap.remove();
+      term.dispose();
+      return null;
+    }
+
+    terminalSeqRef.current += 1;
+    const title = `Terminal ${terminalSeqRef.current}`;
+
+    terminalInstancesRef.current.set(created.id, { term, fit, wrap, title });
+    setTerminals((prev) => [...prev, { id: created.id, title }]);
+    setActiveTerminalId(created.id);
+
+    term.onData((data) => {
+      void window.codegrey?.terminal?.write({ id: created.id, data });
+    });
+
+    requestFitActive();
+    return created.id;
+  };
+
+  const closeTerminalInstance = async (id: string) => {
+    const inst = terminalInstancesRef.current.get(id);
+    terminalInstancesRef.current.delete(id);
+    if (inst) {
+      try {
+        inst.term.dispose();
+      } catch {
+        // ignore
+      }
+      try {
+        inst.wrap.remove();
+      } catch {
+        // ignore
+      }
+    }
+
+    await window.codegrey?.terminal?.kill({ id });
+
+    setTerminals((prev) => {
+      const next = prev.filter((t) => t.id !== id);
+      setActiveTerminalId((current) => (current === id ? next[next.length - 1]?.id ?? null : current));
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!terminalOpen) return;
+    const timer = window.setTimeout(() => {
+      if (!activeTerminalId) {
+        void createTerminal();
+        return;
+      }
+      requestFitActive();
+    }, 180);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [terminalOpen, terminalHeight, activeTerminalId]);
+
+  useEffect(() => {
+    const disposeData = window.codegrey?.terminal?.onData?.((msg) => {
+      const inst = terminalInstancesRef.current.get(String(msg.id));
+      if (!inst) return;
+      inst.term.write(msg.data);
+    });
+    const disposeExit = window.codegrey?.terminal?.onExit?.((msg) => {
+      const sid = String(msg.id);
+      const inst = terminalInstancesRef.current.get(sid);
+      terminalInstancesRef.current.delete(sid);
+      if (inst) {
+        try {
+          inst.term.dispose();
+        } catch {
+          // ignore
+        }
+        try {
+          inst.wrap.remove();
+        } catch {
+          // ignore
+        }
+      }
+      setTerminals((prev) => prev.filter((t) => t.id !== sid));
+      setActiveTerminalId((prev) => (prev === sid ? null : prev));
+    });
+
+    return () => {
+      try {
+        disposeData?.();
+        disposeExit?.();
+      } catch {
+        // ignore
       }
 
-      terminalIdRef.current = created.id;
-      terminalIdState.current = created.id;
-
-      // Handle Input
-      const dataListener = term.onData((data) => {
-        const id = terminalIdRef.current;
-        if (id) void window.codegrey?.terminal?.write({ id, data });
-      });
-
-      // Handle Backend Data
-      const disposeIPCData = window.codegrey?.terminal?.onData((msg) => {
-        if (msg.id === terminalIdRef.current) {
-          xtermRef.current?.write(msg.data);
+      const ids = Array.from(terminalInstancesRef.current.keys());
+      terminalInstancesRef.current.forEach((inst) => {
+        try {
+          inst.term.dispose();
+        } catch {
+          // ignore
+        }
+        try {
+          inst.wrap.remove();
+        } catch {
+          // ignore
         }
       });
-
-      const disposeIPCExit = window.codegrey?.terminal?.onExit((msg) => {
-        if (msg.id === terminalIdRef.current) {
-          terminalIdRef.current = null;
-          terminalIdState.current = null;
-        }
-      });
-
-      (term as any).__codegreyDispose = () => {
-        dataListener.dispose();
-        disposeIPCData?.();
-        disposeIPCExit?.();
-        term.dispose();
-      };
-
-      return created.id;
-    } finally {
-      terminalCreatingRef.current = false;
-    }
-  };
-
-  const openTerminal = async () => {
-    const id = await ensureTerminal();
-    if (!id) return;
-    fitRef.current?.fit();
-    const term = xtermRef.current;
-    if (!term) return;
-    void window.codegrey?.terminal?.resize({ id, cols: term.cols, rows: term.rows });
-  };
-
-  const closeTerminal = async () => {
-    const id = terminalIdRef.current;
-    if (id) {
-      terminalIdRef.current = null;
-      await window.codegrey?.terminal?.kill({ id });
-    }
-    const term = xtermRef.current as any;
-    if (term?.__codegreyDispose) {
-      term.__codegreyDispose();
-    }
-    xtermRef.current = null;
-    fitRef.current = null;
-    
-    // Clear the DOM to prevent ghost cursors
-    if (terminalWrapRef.current) {
-      terminalWrapRef.current.innerHTML = "";
-    }
-  };
-
-  useEffect(() => {
-    if (terminalOpen) {
-      // Small delay to ensure the panel has expanded and DOM is ready
-      const timer = setTimeout(() => {
-        void openTerminal();
-      }, 200);
-      return () => clearTimeout(timer);
-    } else {
-      void closeTerminal();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [terminalOpen]);
-
-  useEffect(() => {
-    return () => {
-      void closeTerminal();
+      terminalInstancesRef.current.clear();
+      ids.forEach((id) => void window.codegrey?.terminal?.kill({ id }));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    terminalInstancesRef.current.forEach((inst, id) => {
+      inst.wrap.dataset.active = id === activeTerminalId ? "true" : "false";
+    });
+    if (terminalOpen) requestFitActive();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTerminalId, terminalOpen]);
+
+  useEffect(() => {
+    const viewport = terminalViewportRef.current;
+    if (!viewport) return;
+    const observer = new ResizeObserver(() => {
+      if (terminalOpen) requestFitActive();
+    });
+    observer.observe(viewport);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [terminalOpen]);
 
   return (
     <div className="ide-shell">
@@ -484,13 +555,58 @@ export function Workspace({
               }}
             />
             <div className="terminal-header">
-              <span>Terminal</span>
-              <button type="button" onClick={() => void closeTerminal()} aria-label="Close terminal">
-                <X size={14} />
-              </button>
+              <div className="terminal-header-left">
+                <span>Terminal</span>
+              </div>
+              <div className="terminal-header-right">
+                <button
+                  type="button"
+                  onClick={() => void createTerminal()}
+                  aria-label="New terminal"
+                  data-tooltip="New terminal"
+                >
+                  <Plus size={14} />
+                </button>
+                <button type="button" onClick={() => setTerminalOpen(false)} aria-label="Hide terminal">
+                  <X size={14} />
+                </button>
+              </div>
             </div>
             <div className="terminal-body">
-              <div ref={terminalWrapRef} className="terminal-xterm" />
+              <div className="terminal-surface">
+                <div ref={terminalViewportRef} className="terminal-xterm" />
+                <div className="terminal-list" aria-label="Terminal instances">
+                  <div className="terminal-list-header">Terminals</div>
+                  {terminals.map((t) => (
+                    <div
+                      key={t.id}
+                      className="terminal-list-item"
+                      data-active={t.id === activeTerminalId ? "true" : "false"}
+                    >
+                      <button
+                        type="button"
+                        className="terminal-list-main"
+                        onClick={() => setActiveTerminalId(t.id)}
+                        title={t.title}
+                      >
+                        <div className="terminal-icon-wrap">
+                          <Terminal size={12} />
+                        </div>
+                        <span>{t.title}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="terminal-list-close"
+                        onClick={() => void closeTerminalInstance(t.id)}
+                        aria-label={`Close ${t.title}`}
+                        title="Close"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
