@@ -1,0 +1,27 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="liquid">
+      <!-- Increased blur for a more spread out melt -->
+      <feGaussianBlur in="SourceGraphic" stdDeviation="18" result="blur" />
+      <!-- High contrast matrix for perfectly sharp edges -->
+      <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 80 -35" result="goo" />
+
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="180" fill="white" />
+  <g filter="url(#liquid)">
+    <!-- Main Center Mass (Bigger) -->
+    <circle cx="256" cy="256" r="110" fill="black" />
+    
+    <!-- Spreading 'Exit Points' (Arms stretching out) -->
+    <circle cx="120" cy="256" r="50" fill="black" /> <!-- Left arm -->
+    <circle cx="392" cy="256" r="60" fill="black" /> <!-- Right arm -->
+    <circle cx="256" cy="110" r="45" fill="black" /> <!-- Top arm -->
+    <circle cx="256" cy="402" r="65" fill="black" /> <!-- Bottom arm -->
+    
+    <!-- Organic smaller blobs for 'random' feel -->
+    <circle cx="160" cy="160" r="40" fill="black" />
+    <circle cx="350" cy="350" r="55" fill="black" />
+    <circle cx="160" cy="350" r="30" fill="black" />
+  </g>
+</svg>
