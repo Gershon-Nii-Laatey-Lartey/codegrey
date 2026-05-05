@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("codegrey", {
   },
   workspace: {
     getRoot: () => ipcRenderer.invoke("workspace:getRoot"),
+    clearRoot: () => ipcRenderer.invoke("workspace:clearRoot"),
     openFolder: () => ipcRenderer.invoke("workspace:openFolder"),
     listDir: (dirPath) => ipcRenderer.invoke("workspace:listDir", dirPath),
     readFile: (filePath) => ipcRenderer.invoke("workspace:readFile", filePath),

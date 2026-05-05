@@ -10,6 +10,7 @@ interface Window {
     };
     workspace?: {
       getRoot: () => Promise<string | null>;
+      clearRoot: () => Promise<null>;
       openFolder: () => Promise<string | null>;
       listDir: (dirPath: string) => Promise<Array<{ name: string; path: string; isDir: boolean }>>;
       readFile: (filePath: string) => Promise<string | null>;

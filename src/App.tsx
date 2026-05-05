@@ -17,7 +17,7 @@ import {
   Play
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Onboarding } from "./pages/Onboarding";
+import { Onboarding, type WorkspaceMode } from "./pages/Onboarding";
 import { Workspace } from "./pages/Workspace";
 
 const getFileIcon = (fileName: string, isDir?: boolean) => {
@@ -95,6 +95,27 @@ export function App() {
     if (!root) return;
     setWorkspaceRoot(root);
     setSelectedFile(null);
+  };
+
+  const startOnboardingWorkspace = async (mode: WorkspaceMode) => {
+    if (mode === "local") {
+      const root = await window.codegrey?.workspace?.openFolder?.();
+      if (!root) return;
+      setWorkspaceRoot(root);
+      setSelectedFile(null);
+      setView("workspace");
+      return;
+    }
+
+    if (mode === "blank") {
+      await window.codegrey?.workspace?.clearRoot?.();
+      setWorkspaceRoot(null);
+      setSelectedFile(null);
+      setView("workspace");
+      return;
+    }
+
+    setView("workspace");
   };
 
   useEffect(() => {
@@ -300,7 +321,7 @@ export function App() {
           }
         >
           {view === "onboarding" ? (
-            <Onboarding onComplete={() => setView("workspace")} />
+            <Onboarding onComplete={startOnboardingWorkspace} />
           ) : (
             <Workspace
               workspaceRoot={workspaceRoot}

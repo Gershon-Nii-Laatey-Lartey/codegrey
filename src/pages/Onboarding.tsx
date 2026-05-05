@@ -44,7 +44,7 @@ const workspaceModes: Array<{
   },
 ];
 
-export function Onboarding({ onComplete }: { onComplete: () => void }) {
+export function Onboarding({ onComplete }: { onComplete: (mode: WorkspaceMode) => void | Promise<void> }) {
   const [selectedIntent, setSelectedIntent] = useState<Intent>("build");
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("local");
   const [indexingEnabled, setIndexingEnabled] = useState(true);
@@ -131,7 +131,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
         <Lock size={15} aria-hidden="true" />
       </div>
 
-      <button className="primary-action" onClick={onComplete}>
+      <button className="primary-action" onClick={() => void onComplete(workspaceMode)}>
         Continue
       </button>
     </section>

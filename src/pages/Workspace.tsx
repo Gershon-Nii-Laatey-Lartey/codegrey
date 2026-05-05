@@ -404,11 +404,35 @@ export function Workspace({
 
         <div className="editor-surface">
           {!workspaceRoot ? (
-            <div className="editor-empty">
-              <p>Open a folder to start.</p>
-              <button className="sidebar-btn sidebar-btn-primary" type="button" onClick={onRequestOpenFolder}>
-                Open Folder
-              </button>
+            <div className="workspace-centered">
+              <div className="workspace-hero">
+                <img
+                  src="/logos/no_card_white.svg"
+                  alt="Codegrey"
+                  className="workspace-logo"
+                />
+                <h1 className="workspace-title">Codegrey</h1>
+
+                <div className="shortcuts-list">
+                  <div className="shortcut-item">
+                    <span>Switch to Agent Manager</span>
+                    <div className="shortcut-keys">
+                      <kbd className="kbd">Ctrl</kbd>
+                      <span>+</span>
+                      <kbd className="kbd">E</kbd>
+                    </div>
+                  </div>
+                  <div className="shortcut-item">
+                    <span>Code with Agent</span>
+                    <div className="shortcut-keys">
+                      <kbd className="kbd">Ctrl</kbd>
+                      <span>+</span>
+                      <kbd className="kbd">L</kbd>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
             </div>
           ) : activeTab ? (
             <div className="editor-pane">

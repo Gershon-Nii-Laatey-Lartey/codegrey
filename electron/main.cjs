@@ -176,6 +176,12 @@ app.whenReady().then(() => {
 
   ipcMain.handle("workspace:getRoot", () => workspaceRoot);
 
+  ipcMain.handle("workspace:clearRoot", () => {
+    workspaceRoot = null;
+    writeWorkspaceState({ root: null });
+    return null;
+  });
+
   ipcMain.handle("workspace:openFolder", async () => {
     const result = await dialog.showOpenDialog({
       properties: ["openDirectory", "createDirectory"],
