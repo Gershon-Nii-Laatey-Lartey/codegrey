@@ -44,7 +44,11 @@ const workspaceModes: Array<{
   },
 ];
 
-export function Onboarding({ onComplete }: { onComplete: (mode: WorkspaceMode) => void | Promise<void> }) {
+export function Onboarding({
+  onComplete,
+}: {
+  onComplete: (mode: WorkspaceMode, options?: { repoUrl?: string }) => void | Promise<void>;
+}) {
   const [selectedIntent, setSelectedIntent] = useState<Intent>("build");
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("local");
   const [indexingEnabled, setIndexingEnabled] = useState(true);
@@ -109,6 +113,11 @@ export function Onboarding({ onComplete }: { onComplete: (mode: WorkspaceMode) =
             value={repoUrl}
             placeholder="https://github.com/org/project"
             onChange={(event) => setRepoUrl(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && repoUrl.trim()) {
+                void onComplete("git", { repoUrl: repoUrl.trim() });
+              }
+            }}
           />
         </label>
       ) : null}
@@ -131,7 +140,11 @@ export function Onboarding({ onComplete }: { onComplete: (mode: WorkspaceMode) =
         <Lock size={15} aria-hidden="true" />
       </div>
 
-      <button className="primary-action" onClick={() => void onComplete(workspaceMode)}>
+      <button
+        className="primary-action"
+        disabled={workspaceMode === "git" && !repoUrl.trim()}
+        onClick={() => void onComplete(workspaceMode, { repoUrl: repoUrl.trim() })}
+      >
         Continue
       </button>
     </section>

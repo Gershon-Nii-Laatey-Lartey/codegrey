@@ -1,7 +1,7 @@
 {
-  "name": "ai-ide-backend",
+  "name": "codegrey-mcp-backend",
   "version": "1.0.0",
-  "description": "Agentic AI backend for your IDE — Cursor/Windsurf level",
+  "description": "MCP-aware agent backend for Codegrey",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

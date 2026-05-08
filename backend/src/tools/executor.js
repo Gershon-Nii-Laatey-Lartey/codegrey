@@ -16,15 +16,23 @@ const execAsync = promisify(exec);
 const sessionMemory = new Map();
 
 class ToolExecutor {
-  constructor({ workspaceRoot, allowDestructive = false }) {
+  constructor({ workspaceRoot, allowDestructive = false, agentMode = "propose" }) {
     this.workspaceRoot = workspaceRoot;
     this.allowDestructive = allowDestructive;
+    this.agentMode = agentMode;
   }
 
   // Resolve path safely within workspace
   resolvePath(filePath) {
-    if (path.isAbsolute(filePath)) return filePath;
-    return path.resolve(this.workspaceRoot, filePath);
+    const resolved = path.isAbsolute(filePath)
+      ? path.resolve(filePath)
+      : path.resolve(this.workspaceRoot, filePath);
+    const root = path.resolve(this.workspaceRoot);
+    const relative = path.relative(root, resolved);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+      throw new Error(`Path outside workspace: ${filePath}`);
+    }
+    return resolved;
   }
 
   // ─── FILESYSTEM ────────────────────────────────────────────────
@@ -55,11 +63,29 @@ class ToolExecutor {
 
   async write_file({ path: filePath, content }) {
     const resolved = this.resolvePath(filePath);
+    const oldContent = await readIfExists(resolved);
+    if (this.agentMode === "propose") {
+      return {
+        __type: "file_change_proposed",
+        filePath: resolved,
+        oldContent,
+        newContent: content,
+      };
+    }
     // Ensure parent directory exists
     await fs.mkdir(path.dirname(resolved), { recursive: true });
     await fs.writeFile(resolved, content, "utf-8");
     const lines = content.split("\n").length;
-    return { success: true, path: filePath, lines_written: lines };
+    return {
+      __type: "file_change_proposed",
+      filePath: resolved,
+      oldContent,
+      newContent: content,
+      autoApplied: true,
+      success: true,
+      path: filePath,
+      lines_written: lines,
+    };
   }
 
   async patch_file({ path: filePath, old_str, new_str }) {
@@ -83,9 +109,22 @@ class ToolExecutor {
     }
 
     const patched = content.replace(old_str, new_str);
+    if (this.agentMode === "propose") {
+      return {
+        __type: "file_change_proposed",
+        filePath: resolved,
+        oldContent: content,
+        newContent: patched,
+      };
+    }
     await fs.writeFile(resolved, patched, "utf-8");
 
     return {
+      __type: "file_change_proposed",
+      filePath: resolved,
+      oldContent: content,
+      newContent: patched,
+      autoApplied: true,
       success: true,
       path: filePath,
       replaced: true,
@@ -424,6 +463,14 @@ async function fileExists(p) {
     return true;
   } catch {
     return false;
+  }
+}
+
+async function readIfExists(p) {
+  try {
+    return await fs.readFile(p, "utf-8");
+  } catch {
+    return "";
   }
 }
 

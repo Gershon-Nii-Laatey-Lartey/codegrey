@@ -11,6 +11,16 @@
 const express = require("express");
 const router = express.Router();
 const { runAgentLoop } = require("../loop/agentLoop");
+const { createProvider } = require("../providers");
+
+function extractText(contentBlocks) {
+  if (!Array.isArray(contentBlocks)) return typeof contentBlocks === 'string' ? contentBlocks : '';
+  return contentBlocks
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
+}
 
 // In-memory session store (replace with Redis for production)
 const sessions = new Map();
@@ -53,7 +63,7 @@ function getOrCreateSession(sessionId) {
  *   data: {"type": "error", "message": "..."}          — Error
  */
 router.post("/agent/chat", async (req, res) => {
-  const { sessionId, message, workspaceRoot, editorContext } = req.body;
+  const { sessionId, message, workspaceRoot, editorContext, aiSettings, agentMode = "propose" } = req.body;
 
   if (!sessionId || !message) {
     return res.status(400).json({ error: "sessionId and message are required" });
@@ -69,7 +79,17 @@ router.post("/agent/chat", async (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.setHeader("Access-Control-Allow-Origin", "*");
 
+  const abortController = new AbortController();
+  let clientClosed = false;
+  res.on("close", () => {
+    if (!res.writableEnded) {
+      clientClosed = true;
+      abortController.abort();
+    }
+  });
+
   const send = (data) => {
+    if (clientClosed || res.destroyed) return;
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
 
@@ -89,6 +109,9 @@ router.post("/agent/chat", async (req, res) => {
       conversationHistory: session.history,
       workspaceRoot: session.workspaceRoot,
       projectContext: session.projectContext,
+      aiSettings,
+      agentMode,
+      abortSignal: abortController.signal,
       onStream: (event) => {
         if (event.type === "text_delta") {
           send({ type: "text_delta", text: event.text });
@@ -107,21 +130,36 @@ router.post("/agent/chat", async (req, res) => {
           iteration,
         });
       },
+      onFileChange: ({ filePath, oldContent, newContent, autoApplied, toolName, toolId, iteration }) => {
+        send({
+          type: "file_change_proposed",
+          filePath,
+          oldContent,
+          newContent,
+          autoApplied,
+          toolName,
+          toolId,
+          iteration,
+        });
+      },
     });
 
     // Save updated history
     session.history = updatedHistory;
 
     // Send completion event
-    send({
-      type: "done",
-      finalMessage,
-      iterations,
-      toolsUsed: toolsUsed.map((t) => t.name),
-    });
+    if (!clientClosed) {
+      send({
+        type: "done",
+        finalMessage,
+        iterations,
+        toolsUsed: toolsUsed.map((t) => t.name),
+      });
+    }
 
-    res.end();
+    if (!clientClosed) res.end();
   } catch (err) {
+    if (clientClosed || abortController.signal.aborted) return;
     console.error("[AgentLoop Error]", err);
     send({ type: "error", message: err.message });
     res.end();
@@ -134,7 +172,7 @@ router.post("/agent/chat", async (req, res) => {
  * Same as above but waits for the full response. Simpler to integrate.
  */
 router.post("/agent/chat/sync", async (req, res) => {
-  const { sessionId, message, workspaceRoot, editorContext } = req.body;
+  const { sessionId, message, workspaceRoot, editorContext, aiSettings, agentMode = "propose" } = req.body;
 
   if (!sessionId || !message || !workspaceRoot) {
     return res.status(400).json({ error: "sessionId, message, and workspaceRoot are required" });
@@ -157,6 +195,8 @@ router.post("/agent/chat/sync", async (req, res) => {
       conversationHistory: session.history,
       workspaceRoot: session.workspaceRoot,
       projectContext: session.projectContext,
+      aiSettings,
+      agentMode,
       onToolCall: ({ toolName, toolInput }) => {
         toolCallLog.push({ tool: toolName, input: toolInput });
       },
@@ -221,6 +261,27 @@ router.post("/agent/clear", (req, res) => {
   res.json({ cleared: true });
 });
 
+router.post("/agent/title", async (req, res) => {
+  const { message, aiSettings } = req.body;
+  if (!message) return res.status(400).json({ error: "message is required" });
+  try {
+    const provider = createProvider(aiSettings);
+    const systemPrompt = "You are a conversation analyzer. Generate a short, 2-to-4 word title for a chat based on the user's first message. Respond ONLY with the title wrapped in <title>...</title> tags. Do not include any other text.";
+    const response = await provider.call({
+      systemPrompt,
+      messages: [{ role: "user", content: message }],
+    });
+    let raw = extractText(response.content) || "New Chat";
+    const match = raw.match(/<title>(.*?)<\/title>/i);
+    let title = match ? match[1].trim() : raw.split('\n')[0].split(' ').slice(0, 5).join(' ').trim();
+    title = title.replace(/^["']|["']$/g, "").trim();
+    if (title.length > 50) title = title.slice(0, 47) + "...";
+    res.json({ title: title || "New Chat" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── SET PROJECT CONTEXT ─────────────────────────────────────────────────────
 /**
  * POST /api/context
@@ -244,7 +305,6 @@ router.post("/context", (req, res) => {
 router.get("/health", (req, res) => {
   res.json({
     status: "ok",
-    model: "claude-opus-4-5",
     sessions: sessions.size,
     timestamp: new Date().toISOString(),
   });
