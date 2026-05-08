@@ -29,6 +29,8 @@ import { Settings as SettingsPage } from "./pages/Settings";
 import { ExplorerTree } from "./components/sidebar/ExplorerTree";
 import { SearchPanel } from "./components/sidebar/SearchPanel";
 import { SourceControlPanel } from "./components/sidebar/SourceControlPanel";
+import { McpPanel } from "./components/sidebar/McpPanel";
+import { McpSettings } from "./pages/McpSettings";
 
 import { readWorkspaceLayout, writeWorkspaceLayout } from "./lib/workspaceLayout";
 import { getFileIcon } from "./lib/utils";
@@ -53,7 +55,7 @@ type SidebarView = "files" | "search" | "source" | "mcp" | "extensions";
 type WorkspaceStats = { added: number; deleted: number };
 
 export function App() {
-  const [view, setView] = useState<"onboarding" | "workspace" | "settings">("onboarding");
+  const [view, setView] = useState<"onboarding" | "workspace" | "settings" | "mcp-settings">("onboarding");
   const [appReady, setAppReady] = useState(false);
   const [browserTabRequest, setBrowserTabRequest] = useState(0);
   const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null);
@@ -159,6 +161,9 @@ export function App() {
     confirmLabel: string;
     action: () => void;
   } | null>(null);
+  const [cloneDialog, setCloneDialog] = useState<{ open: boolean; url: string; busy: boolean; error: string }>({
+    open: false, url: "", busy: false, error: "",
+  });
 
   const requestWorkspaceSwitch = (path: string, name: string, action: () => void) => {
     if (workspaceRoot === path) {
@@ -340,28 +345,43 @@ export function App() {
   }, [workspaceRoot]);
 
   const cloneRepository = async (repoUrl = "") => {
-    const repo = repoUrl.trim() || window.prompt("Repository URL or owner/repo")?.trim() || "";
-    if (!repo) return null;
-    const result = await window.codegrey?.workspace?.cloneRepo?.(repo);
-    if (!result?.ok || !result.path) {
-      if (result?.error) {
-        setPendingAction({
-          title: "Clone Failed",
-          description: result.error,
-          confirmLabel: "OK",
-          action: () => undefined,
-        });
+    if (repoUrl.trim()) {
+      // Called with a URL directly (e.g. from onboarding) — skip dialog
+      const result = await window.codegrey?.workspace?.cloneRepo?.(repoUrl.trim());
+      if (!result?.ok || !result.path) {
+        if (result?.error) {
+          setPendingAction({ title: "Clone Failed", description: result.error, confirmLabel: "OK", action: () => undefined });
+        }
+        return null;
       }
-      return null;
+      setWorkspaceRoot(result.path);
+      setSelectedFile(null);
+      setActiveConversationId(null);
+      setSidebarView("files");
+      setView("workspace");
+      await reloadWorkspaces();
+      return result.path;
     }
+    // No URL supplied — open the custom clone dialog
+    setCloneDialog({ open: true, url: "", busy: false, error: "" });
+    return null;
+  };
 
+  const doClone = async (url: string) => {
+    if (!url.trim()) { setCloneDialog(d => ({ ...d, error: "Please enter a repository URL" })); return; }
+    setCloneDialog(d => ({ ...d, busy: true, error: "" }));
+    const result = await window.codegrey?.workspace?.cloneRepo?.(url.trim());
+    if (!result?.ok || !result.path) {
+      setCloneDialog(d => ({ ...d, busy: false, error: result?.error || "Clone failed" }));
+      return;
+    }
+    setCloneDialog({ open: false, url: "", busy: false, error: "" });
     setWorkspaceRoot(result.path);
     setSelectedFile(null);
     setActiveConversationId(null);
     setSidebarView("files");
     setView("workspace");
     await reloadWorkspaces();
-    return result.path;
   };
 
   const startOnboardingWorkspace = async (mode: WorkspaceMode, options?: { repoUrl?: string }) => {
@@ -469,43 +489,43 @@ export function App() {
               >
                 <Menu size={16} />
               </button>
-              {appMenuOpen ? (
-                <div className="app-menu" role="menu">
-                  <button type="button" role="menuitem" onClick={() => runMenuAction(newEmptyWorkspace)}>
-                    <FilePlusIcon />
-                    <span>New Empty Workspace</span>
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => runMenuAction(() => window.codegrey?.windowControls?.newWindow?.())}>
-                    <PanelTopOpen size={15} />
-                    <span>New Window</span>
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => runMenuAction(() => window.codegrey?.windowControls?.newEmptyWindow?.())}>
-                    <PanelTopOpen size={15} />
-                    <span>New Empty Window</span>
-                  </button>
-                  <div className="app-menu-separator" />
-                  <button type="button" role="menuitem" onClick={() => runMenuAction(openFolder)}>
-                    <FolderOpen size={15} />
-                    <span>Open Folder...</span>
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => runMenuAction(openFile)}>
-                    <File size={15} />
-                    <span>Open File...</span>
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => runMenuAction(async () => { await cloneRepository(); })}>
-                    <GitPullRequest size={15} />
-                    <span>Clone Repository...</span>
-                  </button>
-                  <div className="app-menu-separator" />
-                  <button type="button" role="menuitem" onClick={() => runMenuAction(() => setView("settings"))}>
-                    <Settings size={15} />
-                    <span>Settings</span>
-                  </button>
-                </div>
-              ) : null}
             </div>
             <span>Codegrey</span>
           </div>
+          {appMenuOpen ? (
+            <div className="app-menu app-menu-fixed" role="menu" ref={appMenuRef as any}>
+              <button type="button" role="menuitem" onClick={() => runMenuAction(newEmptyWorkspace)}>
+                <FilePlusIcon />
+                <span>New Empty Workspace</span>
+              </button>
+              <button type="button" role="menuitem" onClick={() => runMenuAction(() => window.codegrey?.windowControls?.newWindow?.())}>
+                <PanelTopOpen size={15} />
+                <span>New Window</span>
+              </button>
+              <button type="button" role="menuitem" onClick={() => runMenuAction(() => window.codegrey?.windowControls?.newEmptyWindow?.())}>
+                <PanelTopOpen size={15} />
+                <span>New Empty Window</span>
+              </button>
+              <div className="app-menu-separator" />
+              <button type="button" role="menuitem" onClick={() => runMenuAction(openFolder)}>
+                <FolderOpen size={15} />
+                <span>Open Folder...</span>
+              </button>
+              <button type="button" role="menuitem" onClick={() => runMenuAction(openFile)}>
+                <File size={15} />
+                <span>Open File...</span>
+              </button>
+              <button type="button" role="menuitem" onClick={() => runMenuAction(async () => { await cloneRepository(); })}>
+                <GitPullRequest size={15} />
+                <span>Clone Repository...</span>
+              </button>
+              <div className="app-menu-separator" />
+              <button type="button" role="menuitem" onClick={() => runMenuAction(() => setView("settings"))}>
+                <Settings size={15} />
+                <span>Settings</span>
+              </button>
+            </div>
+          ) : null}
 
           <div className="sidebar-activity-bar">
             <button
@@ -601,10 +621,10 @@ export function App() {
                   onOpenFile={openSelectedFile}
                   onStatusChange={(status) => updateCurrentWorkspaceStats(status.ok ? status.files : [])}
                 />
+              ) : sidebarView === "mcp" ? (
+                <McpPanel onOpenSettings={() => setView("mcp-settings")} />
               ) : (
-                <div className="sidebar-empty-note">
-                  {sidebarView === "mcp" ? "MCP connections will appear here." : "Extensions will appear here."}
-                </div>
+                <div className="sidebar-empty-note">Extensions will appear here.</div>
               )}
             </div> : null}
           </div>
@@ -844,6 +864,8 @@ export function App() {
             <Onboarding onComplete={startOnboardingWorkspace} />
           ) : view === "settings" ? (
             <SettingsPage onBack={() => setView("workspace")} />
+          ) : view === "mcp-settings" ? (
+            <McpSettings onBack={() => setView(workspaceRoot ? "workspace" : "onboarding")} />
           ) : (
             <Workspace
               workspaceRoot={workspaceRoot}
@@ -873,6 +895,64 @@ export function App() {
               onCloseConversation={() => setActiveConversationId(null)}
               onClearSelectedFile={() => setSelectedFile(null)}
             />
+          )}
+
+          {cloneDialog.open && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999,
+              backgroundColor: 'rgba(0, 0, 0, 0.45)'
+            }}>
+              <div style={{
+                background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '12px', width: '420px', boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                overflow: 'hidden'
+              }}>
+                <div style={{ padding: '18px 18px 12px' }}>
+                  <h3 style={{ margin: '0 0 6px', fontSize: '14px', fontWeight: 600, color: '#e5e5e5' }}>
+                    Clone Repository
+                  </h3>
+                  <p style={{ margin: '0 0 14px', fontSize: '12px', color: '#888', lineHeight: 1.5 }}>
+                    Enter a GitHub URL or <code style={{ fontFamily: 'monospace', color: '#aaa' }}>owner/repo</code> shorthand
+                  </p>
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="https://github.com/org/repo  or  org/repo"
+                    value={cloneDialog.url}
+                    onChange={e => setCloneDialog(d => ({ ...d, url: e.target.value, error: "" }))}
+                    onKeyDown={e => { if (e.key === "Enter") void doClone(cloneDialog.url); if (e.key === "Escape") setCloneDialog(d => ({ ...d, open: false })); }}
+                    style={{
+                      width: '100%', boxSizing: 'border-box',
+                      padding: '8px 10px', fontSize: '13px',
+                      background: '#111', color: '#e5e5e5',
+                      border: `1px solid ${cloneDialog.error ? '#d34a4a' : 'rgba(255,255,255,0.12)'}`,
+                      borderRadius: '7px', outline: 'none', fontFamily: 'inherit'
+                    }}
+                  />
+                  {cloneDialog.error && (
+                    <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#d34a4a' }}>{cloneDialog.error}</p>
+                  )}
+                </div>
+                <div style={{
+                  padding: '10px 18px 14px', display: 'flex', gap: '8px', justifyContent: 'flex-end'
+                }}>
+                  <button type="button" onClick={() => setCloneDialog(d => ({ ...d, open: false }))} style={{
+                    padding: '6px 16px', fontSize: '13px', fontWeight: 500,
+                    background: 'transparent', color: '#ccc',
+                    border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', cursor: 'pointer'
+                  }}>Cancel</button>
+                  <button type="button" onClick={() => void doClone(cloneDialog.url)} disabled={cloneDialog.busy} style={{
+                    padding: '6px 18px', fontSize: '13px', fontWeight: 600,
+                    background: '#2563eb', color: '#fff',
+                    border: 'none', borderRadius: '6px', cursor: cloneDialog.busy ? 'wait' : 'pointer',
+                    opacity: cloneDialog.busy ? 0.7 : 1
+                  }}>
+                    {cloneDialog.busy ? "Cloning…" : "Clone"}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           {pendingAction && (

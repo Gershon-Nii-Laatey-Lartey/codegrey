@@ -9,7 +9,11 @@
     "dev:web": "vite --host 127.0.0.1",
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -31,7 +35,101 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "concurrently": "^9.0.0",
+    "electron-builder": "^25.1.8",
     "typescript": "^5.0.0",
     "wait-on": "^8.0.0"
+  },
+  "build": {
+    "appId": "com.codegrey.app",
+    "productName": "Codegrey",
+    "copyright": "Copyright © 2025 Codegrey",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "backend/**/*",
+      "mcp-backend/**/*",
+      "public/**/*",
+      "!**/node_modules/.cache",
+      "!**/*.map"
+    ],
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!node_modules/.cache"
+        ]
+      },
+      {
+        "from": "mcp-backend",
+        "to": "mcp-backend",
+        "filter": [
+          "**/*",
+          "!node_modules/.cache"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/icons/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "public/icons/icon.ico",
+      "uninstallerIcon": "public/icons/icon.ico",
+      "installerHeaderIcon": "public/icons/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Codegrey",
+      "artifactName": "Codegrey-Setup-${version}.exe"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "public/icons/icon.icns",
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "artifactName": "Codegrey-${version}-${arch}.dmg"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/icons",
+      "category": "Development",
+      "artifactName": "Codegrey-${version}-${arch}.AppImage"
+    },
+    "publish": null
   }
 }
