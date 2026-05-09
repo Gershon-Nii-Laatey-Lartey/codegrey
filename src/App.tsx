@@ -33,6 +33,8 @@ import { KnowledgePage } from "./pages/KnowledgePage";
 import { SourceControlPanel } from "./components/sidebar/SourceControlPanel";
 import { McpPanel } from "./components/sidebar/McpPanel";
 import { McpSettings } from "./pages/McpSettings";
+import { AuthGate } from "./pages/AuthGate";
+import { useDesktopAuth } from "./lib/desktopAuth";
 
 import { readWorkspaceLayout, writeWorkspaceLayout } from "./lib/workspaceLayout";
 import { getFileIcon } from "./lib/utils";
@@ -58,6 +60,8 @@ type WorkspaceStats = { added: number; deleted: number };
 
 export function App() {
   const [view, setView] = useState<"onboarding" | "workspace" | "settings" | "mcp-settings" | "accounts" | "knowledge">("onboarding");
+  const { auth } = useDesktopAuth();
+  const [authSkipped, setAuthSkipped] = useState(false);
   const [appReady, setAppReady] = useState(false);
   const [browserTabRequest, setBrowserTabRequest] = useState(0);
   const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null);
@@ -906,7 +910,13 @@ export function App() {
             : { justifyContent: 'center', alignItems: 'center' }
           }
         >
-          {view === "onboarding" ? (
+          {!auth.ready ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>
+              <div className="spin" style={{ width: 20, height: 20, border: "2px solid var(--muted)", borderTopColor: "var(--text)", borderRadius: "50%" }} />
+            </div>
+          ) : !auth.loggedIn && !authSkipped ? (
+            <AuthGate onSkip={() => setAuthSkipped(true)} />
+          ) : view === "onboarding" ? (
             <Onboarding onComplete={startOnboardingWorkspace} />
           ) : view === "settings" ? (
             <SettingsPage onBack={() => setView("workspace")} />

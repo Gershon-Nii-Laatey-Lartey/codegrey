@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell, safeStorage, net } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFile } = require("node:child_process");
@@ -228,6 +228,37 @@ const DEFAULT_SETTINGS = {
 
 function getSettingsPath() {
   return path.join(app.getPath("userData"), "settings.json");
+}
+
+// ── Auth token store (safeStorage encrypted) ─────────────────────────────
+const AUTH_FILE_ENC  = () => path.join(app.getPath("userData"), "auth.enc");
+const AUTH_FILE_PLAIN = () => path.join(app.getPath("userData"), "auth.json");
+
+function saveAuthTokens(tokens) {
+  try {
+    if (!tokens) {
+      [AUTH_FILE_ENC(), AUTH_FILE_PLAIN()].forEach(f => { if (fs.existsSync(f)) fs.unlinkSync(f); });
+      return;
+    }
+    const json = JSON.stringify(tokens);
+    if (safeStorage.isEncryptionAvailable()) {
+      fs.writeFileSync(AUTH_FILE_ENC(), safeStorage.encryptString(json));
+    } else {
+      fs.writeFileSync(AUTH_FILE_PLAIN(), json, "utf8");
+    }
+  } catch (e) { console.warn("[auth] save:", e.message); }
+}
+
+function loadAuthTokens() {
+  try {
+    const enc = AUTH_FILE_ENC();
+    if (safeStorage.isEncryptionAvailable() && fs.existsSync(enc)) {
+      return JSON.parse(safeStorage.decryptString(fs.readFileSync(enc)));
+    }
+    const plain = AUTH_FILE_PLAIN();
+    if (fs.existsSync(plain)) return JSON.parse(fs.readFileSync(plain, "utf8"));
+  } catch (e) { console.warn("[auth] load:", e.message); }
+  return null;
 }
 
 function readSettings() {
@@ -808,6 +839,95 @@ app.whenReady().then(async () => {
     return runGit(["commit", "-m", msg], workspaceRoot);
   });
 
+
+  // ── Auth IPC ───────────────────────────────────────────────────────────────
+  ipcMain.handle("auth:loadTokens", () => loadAuthTokens());
+
+  ipcMain.handle("auth:saveTokens", (event, tokens) => {
+    saveAuthTokens(tokens);
+    return true;
+  });
+
+  ipcMain.handle("auth:signOut", () => {
+    saveAuthTokens(null);
+    return true;
+  });
+
+  ipcMain.handle("auth:startLogin", async (event) => {
+    const http = require("http");
+    const crypto = require("crypto");
+    const state = crypto.randomUUID();
+
+    // Spin up a loopback server on a random port to receive the callback
+    return new Promise((resolve, reject) => {
+      const server = http.createServer(async (req, res) => {
+        const url = new URL(req.url, "http://localhost");
+        const code = url.searchParams.get("code");
+        const retState = url.searchParams.get("state");
+
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(`<html><body style="font-family:system-ui;text-align:center;padding:60px;background:#0f0f0f;color:#e5e5e5"><h2>Authorized. You can close this tab.</h2></body></html>`);
+        server.close();
+
+        if (retState !== state || !code) return reject(new Error("state_mismatch or missing code"));
+
+        try {
+          const resp = await fetch("https://project--f6cd3b6f-a0c3-4a56-b077-0a3c46d7c077.lovable.app/api/public/desktop/exchange", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code }),
+          });
+          const data = await resp.json();
+          if (data.error) return reject(new Error(data.error));
+          saveAuthTokens({
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+            user: data.user,
+            roles: data.roles,
+          });
+          resolve(data);
+        } catch (e) {
+          reject(e);
+        }
+      });
+
+      server.listen(0, "127.0.0.1", () => {
+        const port = server.address().port;
+        const callback = `http://127.0.0.1:${port}/cb`;
+        const loginUrl = new URL("https://project--f6cd3b6f-a0c3-4a56-b077-0a3c46d7c077.lovable.app/auth/login");
+        loginUrl.searchParams.set("callback", callback);
+        loginUrl.searchParams.set("state", state);
+        loginUrl.searchParams.set("client", "Codegrey Desktop");
+        shell.openExternal(loginUrl.toString());
+      });
+
+      // Timeout after 5 min
+      setTimeout(() => { server.close(); reject(new Error("login_timeout")); }, 5 * 60 * 1000);
+    });
+  });
+
+  ipcMain.handle("auth:fetchAccount", async (event, accessToken) => {
+    const SUPABASE_URL = "https://yvlccgopiyvitludrrnx.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2bGNjZ29waXl2aXRsdWRycm54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwMDEwMTEsImV4cCI6MjA2MjU3NzAxMX0.CQ4dRIAU1nc7me2bI98WzHdBiRu9xfKUoeKVybw3kO0";
+    const headers = {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    };
+    try {
+      const [profRes, subRes, usageRes] = await Promise.all([
+        fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id,email,full_name,avatar_url,plan&limit=1`, { headers }),
+        fetch(`${SUPABASE_URL}/rest/v1/subscriptions?select=plan,status,monthly_price_cents,current_period_end,cancel_at_period_end&limit=1`, { headers }),
+        fetch(`${SUPABASE_URL}/rest/v1/usage_events?select=event_type,model,tokens_in,tokens_out,lines,cost_cents,created_at&created_at=gte.${new Date(Date.now()-30*24*3600*1000).toISOString()}&order=created_at.desc`, { headers }),
+      ]);
+      const [profiles, subscriptions, usage] = await Promise.all([profRes.json(), subRes.json(), usageRes.json()]);
+      return { profile: profiles?.[0] ?? null, subscription: subscriptions?.[0] ?? null, usage: Array.isArray(usage) ? usage : [] };
+    } catch (e) {
+      console.warn("[auth] fetchAccount:", e.message);
+      return null;
+    }
+  });
+
   ipcMain.handle("settings:get", () => readSettings());
 
   ipcMain.handle("settings:set", (event, partial) => {
@@ -997,6 +1117,12 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("window:new", () => {
     createWindow();
+  });
+
+  ipcMain.handle("window:openExternal", (event, url) => {
+    if (typeof url === "string" && (url.startsWith("https://") || url.startsWith("http://"))) {
+      shell.openExternal(url);
+    }
   });
 
   ipcMain.handle("window:new-empty", () => {

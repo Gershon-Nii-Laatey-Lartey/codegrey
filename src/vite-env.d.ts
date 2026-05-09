@@ -11,6 +11,7 @@ interface Window {
       close: () => Promise<void>;
       newWindow?: () => Promise<void>;
       newEmptyWindow?: () => Promise<void>;
+      openExternal?: (url: string) => Promise<void>;
     };
     workspace?: {
       getRoot: () => Promise<string | null>;
@@ -59,6 +60,14 @@ interface Window {
       kill: (payload: { id: string }) => Promise<void>;
       onData: (handler: (msg: { id: string; data: string }) => void) => () => void;
       onExit: (handler: (msg: { id: string }) => void) => () => void;
+    };
+    readFileBinary?: (filePath: string) => Promise<{ base64: string } | null>;
+    auth?: {
+      loadTokens: () => Promise<{ access_token: string; refresh_token: string; user: any; roles: string[] } | null>;
+      saveTokens: (tokens: any) => Promise<boolean>;
+      signOut: () => Promise<boolean>;
+      startLogin: () => Promise<{ access_token: string; refresh_token: string; user: any; roles: string[] }>;
+      fetchAccount: (accessToken: string) => Promise<{ profile: any; subscription: any; usage: any[] } | null>;
     };
   };
 }

@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("codegrey", {
     close: () => ipcRenderer.invoke("window:close"),
     newWindow: () => ipcRenderer.invoke("window:new"),
     newEmptyWindow: () => ipcRenderer.invoke("window:new-empty"),
+    openExternal: (url) => ipcRenderer.invoke("window:openExternal", url),
   },
   workspace: {
     getRoot: () => ipcRenderer.invoke("workspace:getRoot"),
@@ -50,6 +51,13 @@ contextBridge.exposeInMainWorld("codegrey", {
     saveConversationMessages: (workspaceId, conversationId, messages) => ipcRenderer.invoke("brain:saveConversationMessages", workspaceId, conversationId, messages),
     renameConversation: (workspaceId, conversationId, newName) => ipcRenderer.invoke("brain:renameConversation", workspaceId, conversationId, newName),
     deleteConversation: (workspaceId, conversationId) => ipcRenderer.invoke("brain:deleteConversation", workspaceId, conversationId),
+  },
+  auth: {
+    loadTokens: () => ipcRenderer.invoke("auth:loadTokens"),
+    saveTokens: (tokens) => ipcRenderer.invoke("auth:saveTokens", tokens),
+    signOut: () => ipcRenderer.invoke("auth:signOut"),
+    startLogin: () => ipcRenderer.invoke("auth:startLogin"),
+    fetchAccount: (accessToken) => ipcRenderer.invoke("auth:fetchAccount", accessToken),
   },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),

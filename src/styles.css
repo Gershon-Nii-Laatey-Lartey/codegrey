@@ -5967,3 +5967,371 @@ input:checked + .mcp-toggle-slider:before {
   object-fit: cover;
   border: 1px solid rgba(255,255,255,0.08);
 }
+
+/* ── Auth Gate ─────────────────────────────────────────────────────────── */
+
+.auth-gate {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: 24px;
+}
+
+.auth-gate-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 360px;
+  width: 100%;
+  gap: 0;
+}
+
+.auth-gate-logo {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--text);
+  margin-bottom: 20px;
+}
+
+.auth-gate-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+
+.auth-gate-sub {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0 0 24px;
+  max-width: 300px;
+}
+
+.auth-gate-error {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 7px;
+  background: rgba(211,74,74,0.1);
+  border: 1px solid rgba(211,74,74,0.2);
+  font-size: 12px;
+  color: #ff8d8d;
+  margin-bottom: 12px;
+}
+
+.auth-gate-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.auth-gate-btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 20px;
+  border-radius: 9px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+  transition: opacity 150ms;
+}
+
+.auth-gate-btn-primary:hover { opacity: 0.88; }
+.auth-gate-btn-primary:disabled { opacity: 0.5; cursor: default; }
+
+.auth-gate-btn-ghost {
+  width: 100%;
+  padding: 9px 20px;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer;
+  transition: all 150ms;
+}
+
+.auth-gate-btn-ghost:hover {
+  color: var(--text);
+  border-color: rgba(255,255,255,0.18);
+}
+
+.auth-gate-btn-ghost:disabled { opacity: 0.4; cursor: default; }
+
+.auth-gate-note {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ── Accounts Page ──────────────────────────────────────────────────────── */
+
+.account-page .settings-content {
+  padding: 0;
+}
+
+.account-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.account-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: var(--muted);
+  padding: 60px;
+}
+
+.account-signed-out {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+  padding: 48px 24px;
+  gap: 10px;
+}
+
+.account-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(167,139,250,0.15);
+  border: 1px solid rgba(167,139,250,0.25);
+  color: #a78bfa;
+  font-size: 16px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.account-avatar-lg {
+  width: 56px;
+  height: 56px;
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+
+.account-signed-out-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.account-signed-out-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+  max-width: 260px;
+  line-height: 1.5;
+}
+
+.account-signin-btn {
+  margin-top: 8px;
+  padding: 9px 20px;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+  transition: opacity 150ms;
+}
+
+.account-signin-btn:hover { opacity: 0.88; }
+
+.account-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.account-identity-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.account-identity-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-identity-email {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 1px;
+}
+
+.account-plan-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(from var(--badge-color, #888) r g b / 0.12);
+  color: var(--badge-color, #888);
+  border: 1px solid rgba(from var(--badge-color, #888) r g b / 0.25);
+  /* Fallback for browsers without relative color syntax */
+  background: color-mix(in srgb, var(--badge-color, #888) 15%, transparent);
+  border-color: color-mix(in srgb, var(--badge-color, #888) 30%, transparent);
+}
+
+.account-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.account-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.account-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 9px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.account-card-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.account-muted { color: var(--muted) !important; font-size: 12px !important; }
+
+.account-billing-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--muted-strong);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 130ms;
+  align-self: flex-start;
+}
+
+.account-billing-btn:hover {
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  border-color: rgba(255,255,255,0.18);
+}
+
+.account-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.account-stat-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.account-stat-label {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.account-stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.account-stat-sub {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.account-sparkline {
+  display: block;
+}
+
+.account-signout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 7px;
+  background: transparent;
+  border: 1px solid rgba(211,74,74,0.2);
+  color: #ff8d8d;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 130ms;
+}
+
+.account-signout-btn:hover {
+  background: rgba(211,74,74,0.08);
+  border-color: rgba(211,74,74,0.35);
+}
