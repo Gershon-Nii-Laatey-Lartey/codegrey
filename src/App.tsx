@@ -889,7 +889,7 @@ export function App() {
 
         <main
           className="app-shell"
-          style={view === "workspace" || view === "settings" || view === "mcp-settings"
+          style={view === "workspace" || view === "settings" || view === "mcp-settings" || view === "knowledge" || view === "accounts"
             ? { padding: 0, alignItems: 'stretch', overflow: 'hidden' }
             : { justifyContent: 'center', alignItems: 'center' }
           }
