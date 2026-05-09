@@ -49,9 +49,11 @@ const CATEGORIES = ["All", "Code Quality", "Architecture", "Workflow", "Security
 export function KnowledgePage({
   onBack,
   activeWorkspaceId,
+  workspaceRoot,
 }: {
   onBack: () => void;
   activeWorkspaceId?: string | null;
+  workspaceRoot?: string | null;
 }) {
   const [tab, setTab] = useState<"knowledge" | "skills">("knowledge");
   const [items, setItems] = useState<KnowledgeItem[]>([]);
@@ -145,12 +147,17 @@ export function KnowledgePage({
 
   const handleInstall = async (skill: MarketplaceSkill) => {
     if (skill.installed) {
-      await api(`/skills/${skill.id}/uninstall`, { method: "DELETE" });
+      const qs = workspaceRoot ? `?workspaceRoot=${encodeURIComponent(workspaceRoot)}` : "";
+      await api(`/skills/${skill.id}/uninstall${qs}`, { method: "DELETE" });
     } else {
       await api(`/skills/${skill.id}/install`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope: "global" }),
+        body: JSON.stringify({
+          scope: workspaceRoot ? "workspace" : "global",
+          workspaceId: activeWorkspaceId ?? null,
+          workspaceRoot: workspaceRoot ?? null,
+        }),
       });
     }
     void loadSkills();
@@ -335,7 +342,7 @@ export function KnowledgePage({
               {filteredSkills.map((skill) => (
                 <div key={skill.id} className={`knowledge-skill-card ${skill.installed ? "installed" : ""}`}>
                   <div className="knowledge-skill-top">
-                    <span className="knowledge-skill-icon">{skill.icon}</span>
+                    <span className="knowledge-skill-icon-tag">{skill.icon}</span>
                     <span className="knowledge-skill-cat">{skill.category}</span>
                   </div>
                   <div className="knowledge-skill-name">{skill.name}</div>

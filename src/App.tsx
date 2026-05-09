@@ -904,6 +904,7 @@ export function App() {
             <KnowledgePage
               onBack={() => setView("workspace")}
               activeWorkspaceId={workspaces.find(w => w.path === workspaceRoot)?.id}
+              workspaceRoot={workspaceRoot}
             />
           ) : view === "mcp-settings" ? (
             <McpSettings onBack={() => setView(workspaceRoot ? "workspace" : "onboarding")} />
