@@ -10,7 +10,7 @@ import {
   Files,
   Search,
   GitBranch,
-  Blocks,
+  Brain,
   FolderOpen,
   Globe,
   Terminal,
@@ -28,6 +28,8 @@ import { Workspace } from "./pages/Workspace";
 import { Settings as SettingsPage } from "./pages/Settings";
 import { ExplorerTree } from "./components/sidebar/ExplorerTree";
 import { SearchPanel } from "./components/sidebar/SearchPanel";
+import { Accounts } from "./pages/Accounts";
+import { KnowledgePage } from "./pages/KnowledgePage";
 import { SourceControlPanel } from "./components/sidebar/SourceControlPanel";
 import { McpPanel } from "./components/sidebar/McpPanel";
 import { McpSettings } from "./pages/McpSettings";
@@ -51,11 +53,11 @@ const McpIcon = ({ size = 18 }: { size?: number }) => (
   </svg>
 );
 
-type SidebarView = "files" | "search" | "source" | "mcp" | "extensions";
+type SidebarView = "files" | "search" | "source" | "mcp" | "knowledge";
 type WorkspaceStats = { added: number; deleted: number };
 
 export function App() {
-  const [view, setView] = useState<"onboarding" | "workspace" | "settings" | "mcp-settings">("onboarding");
+  const [view, setView] = useState<"onboarding" | "workspace" | "settings" | "mcp-settings" | "accounts" | "knowledge">("onboarding");
   const [appReady, setAppReady] = useState(false);
   const [browserTabRequest, setBrowserTabRequest] = useState(0);
   const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null);
@@ -117,6 +119,15 @@ export function App() {
     window.addEventListener("mousedown", close);
     return () => window.removeEventListener("mousedown", close);
   }, []);
+
+  useEffect(() => {
+    const onRefresh = () => {
+      void refreshCurrentWorkspaceStats();
+      void reloadWorkspaces();
+    };
+    window.addEventListener('codegrey:stats-refresh' as any, onRefresh);
+    return () => window.removeEventListener('codegrey:stats-refresh' as any, onRefresh);
+  }, [workspaceRoot]);
 
   useEffect(() => {
     const loadBrain = async () => {
@@ -557,15 +568,15 @@ export function App() {
               <McpIcon size={18} />
             </button>
             <button
-              className={`activity-icon ${sidebarView === "extensions" ? "active" : ""}`}
-              data-tooltip="Extensions"
-              onClick={() => setSidebarView("extensions")}
+              className={`activity-icon ${sidebarView === "knowledge" ? "active" : ""}`}
+              data-tooltip="Knowledge & Skills"
+              onClick={() => setSidebarView("knowledge")}
             >
-              <Blocks size={18} />
+              <Brain size={18} />
             </button>
           </div>
 
-          <div className="sidebar-section">
+          <div className="sidebar-section" data-open={sidebarSectionsOpen.primary}>
             <button
               type="button"
               className="sidebar-section-header"
@@ -581,7 +592,7 @@ export function App() {
                       ? "SOURCE CONTROL"
                       : sidebarView === "mcp"
                         ? "MCP"
-                        : "EXTENSIONS"}
+                        : "KNOWLEDGE & SKILLS"}
               </span>
             </button>
             {sidebarSectionsOpen.primary ? <div className="sidebar-section-content">
@@ -624,12 +635,18 @@ export function App() {
               ) : sidebarView === "mcp" ? (
                 <McpPanel onOpenSettings={() => setView("mcp-settings")} />
               ) : (
-                <div className="sidebar-empty-note">Extensions will appear here.</div>
+                <div className="sidebar-knowledge-mini">
+                  <Brain size={20} opacity={0.3} />
+                  <p>Knowledge & Skills</p>
+                  <button className="sidebar-btn sidebar-btn-primary" onClick={() => setView("knowledge")}>
+                    Open Knowledge Base
+                  </button>
+                </div>
               )}
             </div> : null}
           </div>
 
-          <div className="sidebar-section">
+          <div className="sidebar-section" data-open={sidebarSectionsOpen.workspaces}>
             <button
               type="button"
               className="sidebar-section-header"
@@ -777,7 +794,7 @@ export function App() {
           </div>
 
           <div className="sidebar-footer">
-            <button className="footer-action-btn">
+            <button className="footer-action-btn" onClick={() => setView("accounts")}>
               <User size={16} />
               <span>Accounts</span>
             </button>
@@ -800,7 +817,10 @@ export function App() {
                 className="title-action-btn"
                 type="button"
                 data-tooltip="Open Browser"
-                onClick={() => setBrowserTabRequest(c => c + 1)}
+                onClick={() => {
+                  if (view === "settings" || view === "mcp-settings") setView("workspace");
+                  setBrowserTabRequest(c => c + 1);
+                }}
               >
                 <Globe size={15} />
               </button>
@@ -808,7 +828,10 @@ export function App() {
                 className="title-action-btn"
                 type="button"
                 data-tooltip={terminalOpen ? "Close Terminal" : "Open Terminal"}
-                onClick={toggleTerminal}
+                onClick={() => {
+                  if (view === "settings" || view === "mcp-settings") setView("workspace");
+                  toggleTerminal();
+                }}
               >
                 <Terminal size={15} />
               </button>
@@ -817,11 +840,22 @@ export function App() {
                 type="button"
                 data-active={workspaceViewMode === "split" ? "true" : "false"}
                 data-tooltip={workspaceViewMode === "agent" ? "Switch to Split View" : "Switch to Agent View"}
-                onClick={toggleWorkspaceViewMode}
+                onClick={() => {
+                  if (view === "settings" || view === "mcp-settings") setView("workspace");
+                  toggleWorkspaceViewMode();
+                }}
               >
                 <Columns size={15} />
               </button>
-              <button className="title-action-btn" type="button" data-tooltip="Run Code">
+              <button 
+                className="title-action-btn" 
+                type="button" 
+                data-tooltip="Run Code"
+                onClick={() => {
+                  if (view === "settings" || view === "mcp-settings") setView("workspace");
+                  // run logic here if any
+                }}
+              >
                 <Play size={15} fill="currentColor" />
               </button>
             </div>
@@ -855,7 +889,7 @@ export function App() {
 
         <main
           className="app-shell"
-          style={view === "workspace" || view === "settings"
+          style={view === "workspace" || view === "settings" || view === "mcp-settings"
             ? { padding: 0, alignItems: 'stretch', overflow: 'hidden' }
             : { justifyContent: 'center', alignItems: 'center' }
           }
@@ -864,6 +898,13 @@ export function App() {
             <Onboarding onComplete={startOnboardingWorkspace} />
           ) : view === "settings" ? (
             <SettingsPage onBack={() => setView("workspace")} />
+          ) : view === "accounts" ? (
+            <Accounts onBack={() => setView("workspace")} />
+          ) : view === "knowledge" ? (
+            <KnowledgePage
+              onBack={() => setView("workspace")}
+              activeWorkspaceId={workspaces.find(w => w.path === workspaceRoot)?.id}
+            />
           ) : view === "mcp-settings" ? (
             <McpSettings onBack={() => setView(workspaceRoot ? "workspace" : "onboarding")} />
           ) : (
@@ -894,6 +935,7 @@ export function App() {
               }}
               onCloseConversation={() => setActiveConversationId(null)}
               onClearSelectedFile={() => setSelectedFile(null)}
+              onOpenMcpSettings={() => setView("mcp-settings")}
             />
           )}
 

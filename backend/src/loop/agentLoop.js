@@ -1,6 +1,7 @@
 const { ToolExecutor } = require("../tools/executor");
 const { buildSystemPrompt } = require("../prompts/system");
 const { createProvider } = require("../providers");
+const http = require("http");
 
 const MAX_ITERATIONS = 50;
 
@@ -8,6 +9,7 @@ async function runAgentLoop({
   userMessage,
   conversationHistory = [],
   workspaceRoot,
+  workspaceId = null,
   projectContext = null,
   onStream = null,
   onToolCall = null,
@@ -21,9 +23,12 @@ async function runAgentLoop({
   const executor = new ToolExecutor({ workspaceRoot, allowDestructive, agentMode });
   const provider = createProvider(aiSettings);
 
+  // Fetch active knowledge + skills to inject into system prompt
+  const { knowledge, skills } = await fetchActiveKnowledge(workspaceId);
+
   const os = process.platform === "win32" ? "Windows" : process.platform === "darwin" ? "macOS" : "Linux";
   const shell = process.platform === "win32" ? "cmd/powershell" : "bash";
-  const systemPrompt = buildSystemPrompt({ workspaceRoot, os, shell, projectContext });
+  const systemPrompt = buildSystemPrompt({ workspaceRoot, os, shell, projectContext, knowledge, skills });
   const messages = [...conversationHistory.map(sanitizeMessageForProvider), { role: "user", content: userMessage }];
 
   let iterations = 0;
@@ -139,6 +144,28 @@ function formatEmptyProviderResponse(response) {
 }
 
 module.exports = { runAgentLoop };
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+async function fetchActiveKnowledge(workspaceId) {
+  return new Promise((resolve) => {
+    const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : "";
+    const req = http.get(`http://localhost:3172/api/knowledge/active${query}`, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve({ knowledge: parsed.items || [], skills: parsed.skills || [] });
+        } catch {
+          resolve({ knowledge: [], skills: [] });
+        }
+      });
+    });
+    req.on("error", () => resolve({ knowledge: [], skills: [] }));
+    req.setTimeout(2000, () => { req.destroy(); resolve({ knowledge: [], skills: [] }); });
+  });
+}
 
 function throwIfAborted(abortSignal) {
   if (!abortSignal?.aborted) return;

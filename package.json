@@ -4,7 +4,12 @@
   "private": true,
   "description": "Codegrey desktop app",
   "main": "electron/main.cjs",
+  "workspaces": [
+    "backend",
+    "mcp-backend"
+  ],
   "scripts": {
+    "install:all": "npm install",
     "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on tcp:5173 && electron .\"",
     "dev:web": "vite --host 127.0.0.1",
     "build": "tsc && vite build",

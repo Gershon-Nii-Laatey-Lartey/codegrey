@@ -1,6 +1,6 @@
 import {
   Check,
-  ChevronDown,
+  Copy,
   FileText,
   Folder,
   GitBranch,
@@ -8,8 +8,10 @@ import {
   Pencil,
   Search,
   SquareTerminal,
+  Terminal,
   Wrench,
   X,
+  ChevronDown,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ChatMessagePart } from "../../types/ai";
@@ -17,8 +19,8 @@ import { getFileIcon, getBaseName } from "../../lib/utils";
 
 const McpIcon = ({ size = 14 }: { size?: number }) => (
   <svg fill="currentColor" fillRule="evenodd" height={size} width={size} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="M15.688 2.343a2.588 2.588 0 00-3.61 0l-9.626 9.44a.863.863 0 01-1.203 0 .823.823 0 010-1.18l9.626-9.44a4.313 4.313 0 016.016 0 4.116 4.116 0 011.204 3.54 4.3 4.3 0 013.609 1.18l.05.05a4.115 4.115 0 010 5.9l-8.706 8.537a.274.274 0 000 .393l1.788 1.754a.823.823 0 010 1.18.863.863 0 01-1.203 0l-1.788-1.753a1.92 1.92 0 010-2.754l8.706-8.538a2.47 2.47 0 000-3.54l-.05-.049a2.588 2.588 0 00-3.607-.003l-7.172 7.034-.002.002-.098.097a.863.863 0 01-1.204 0 .823.823 0 010-1.18l7.273-7.133a2.47 2.47 0 00-.003-3.537z"/>
-    <path d="M14.485 4.703a.823.823 0 000-1.18.863.863 0 00-1.204 0l-7.119 6.982a4.115 4.115 0 000 5.9 4.314 4.314 0 006.016 0l7.12-6.982a.823.823 0 000-1.18.863.863 0 00-1.204 0l-7.119 6.982a2.588 2.588 0 01-3.61 0 2.47 2.47 0 010-3.54l7.12-6.982z"/>
+    <path d="M15.688 2.343a2.588 2.588 0 00-3.61 0l-9.626 9.44a.863.863 0 01-1.203 0 .823.823 0 010-1.18l9.626-9.44a4.313 4.313 0 016.016 0 4.116 4.116 0 011.204 3.54 4.3 4.3 0 013.609 1.18l.05.05a4.115 4.115 0 010 5.9l-8.706 8.537a.274.274 0 000 .393l1.788 1.754a.823.823 0 010 1.18.863.863 0 01-1.203 0l-1.788-1.753a1.92 1.92 0 010-2.754l8.706-8.538a2.47 2.47 0 000-3.54l-.05-.049a2.588 2.588 0 00-3.607-.003l-7.172 7.034-.002.002-.098.097a.863.863 0 01-1.204 0 .823.823 0 010-1.18l7.273-7.133a2.47 2.47 0 00-.003-3.537z" />
+    <path d="M14.485 4.703a.823.823 0 000-1.18.863.863 0 00-1.204 0l-7.119 6.982a4.115 4.115 0 000 5.9 4.314 4.314 0 006.016 0l7.12-6.982a.823.823 0 000-1.18.863.863 0 00-1.204 0l-7.119 6.982a2.588 2.588 0 01-3.61 0 2.47 2.47 0 010-3.54l7.12-6.982z" />
   </svg>
 );
 
@@ -48,8 +50,45 @@ export function ToolCard({ part }: { part: ToolPart }) {
   const canExpand = mcp.isMcp || !["read_file", "list_directory", "write_file", "patch_file"].includes(part.name);
   const Icon = mcp.isMcp ? null : iconForTool(part.name);
 
+  let displayResult: React.ReactNode = null;
+  if (canExpand && open) {
+    if (part.name === "run_command" && part.result !== undefined && part.result !== null) {
+      const res = part.result as any;
+      let stdout = "";
+      let stderr = "";
+      let exitCode: number | undefined;
+
+      if (typeof res === "string") {
+        stdout = res;
+      } else if (typeof res === "object") {
+        stdout = typeof res.stdout === 'string' ? res.stdout : (res.stdout ? JSON.stringify(res.stdout, null, 2) : "");
+        stderr = typeof res.stderr === 'string' ? res.stderr : (res.stderr ? JSON.stringify(res.stderr, null, 2) : "");
+        exitCode = res.exit_code ?? res.exitCode;
+        if (!stdout && !stderr && exitCode === undefined) {
+          stdout = JSON.stringify(res, null, 2);
+        }
+      } else {
+        stdout = String(res);
+      }
+
+      displayResult = (
+        <div className="minimal-cmd-output">
+          {stdout && <pre className="cmd-out">{stdout}</pre>}
+          {stderr && <pre className="cmd-err">{stderr}</pre>}
+          {exitCode !== undefined && <div className="cmd-exit">Exit {exitCode}</div>}
+        </div>
+      );
+    } else {
+      displayResult = (
+        <pre className="generic-tool-output">
+          {JSON.stringify({ input: part.input, result: part.result }, null, 2)}
+        </pre>
+      );
+    }
+  }
+
   return (
-    <div className="tool-call-card" data-status={part.status} data-open={open ? "true" : "false"} data-mcp={mcp.isMcp ? "true" : undefined}>
+    <div className="tool-call-card minimal" data-status={part.status} data-open={open ? "true" : "false"} data-mcp={mcp.isMcp ? "true" : undefined}>
       <button
         className="tool-call-main"
         type="button"
@@ -62,11 +101,11 @@ export function ToolCard({ part }: { part: ToolPart }) {
           ) : mcp.isMcp ? (
             <McpIcon size={14} />
           ) : part.name === "list_directory" ? (
-            <Folder size={16} strokeWidth={1.5} style={{ color: iconData?.color || "var(--muted)" }} />
+            <Folder size={14} strokeWidth={1.5} style={{ color: iconData?.color || "var(--muted)" }} />
           ) : iconData?.svg ? (
-            <img src={iconData.svg} alt="" style={{ width: 16, height: 16 }} />
+            <img src={iconData.svg} alt="" style={{ width: 14, height: 14 }} />
           ) : (iconData as any)?.char ? (
-            <span className="seti-icon" style={{ color: (iconData as any).color || "inherit", fontSize: "16px" }}>{(iconData as any).char}</span>
+            <span className="seti-icon" style={{ color: (iconData as any).color || "inherit", fontSize: "14px" }}>{(iconData as any).char}</span>
           ) : Icon ? (
             <Icon size={14} />
           ) : (
@@ -82,12 +121,12 @@ export function ToolCard({ part }: { part: ToolPart }) {
         </span>
         <span className="tool-call-status">
           {part.status === "done" ? <Check size={14} /> : part.status === "error" ? <X size={14} /> : null}
-          {canExpand && <ChevronDown size={14} />}
+          {canExpand && <ChevronDown size={14} className="tool-expand-chevron" />}
         </span>
       </button>
       {canExpand && open ? (
         <div className="tool-call-details">
-          <pre>{JSON.stringify({ input: part.input, result: part.result }, null, 2)}</pre>
+          {displayResult}
         </div>
       ) : null}
     </div>

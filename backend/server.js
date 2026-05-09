@@ -10,6 +10,7 @@ const cors = require("cors");
 const morgan = require("morgan");
 
 const agentRoutes = require("./src/routes/agent");
+const knowledgeRoutes = require("./src/routes/knowledge");
 
 const app = express();
 const PORT = process.env.PORT || 3172;
@@ -17,7 +18,7 @@ const PORT = process.env.PORT || 3172;
 app.use(
   cors({
     origin: process.env.ALLOWED_ORIGINS?.split(",") || "*",
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
@@ -26,6 +27,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use(morgan("dev"));
 
 app.use("/api", agentRoutes);
+app.use("/api", knowledgeRoutes);
 
 app.use((err, req, res, next) => {
   console.error("[Server Error]", err);

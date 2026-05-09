@@ -4,7 +4,14 @@
  * full file access, multi-step planning, autonomous editing, terminal execution.
  */
 
-const buildSystemPrompt = ({ workspaceRoot, os, shell, projectContext }) => `
+const buildSystemPrompt = ({ workspaceRoot, os, shell, projectContext, knowledge = [], skills = [] }) => {
+  const knowledgeSection = [...knowledge, ...skills].filter((k) => k.enabled !== false && k.content);
+
+  const knowledgeBlock = knowledgeSection.length > 0
+    ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nUSER RULES & KNOWLEDGE\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nThe user has defined the following rules and knowledge. Follow them precisely at all times:\n\n${knowledgeSection.map((k, i) => `${i + 1}. [${k.title}]: ${k.content}`).join("\n\n")}\n`
+    : "";
+
+  return `
 You are an elite agentic coding AI embedded inside a developer's IDE.
 You have full access to the user's codebase, terminal, and filesystem.
 You are NOT a passive chat assistant — you are an autonomous coding agent.
@@ -28,7 +35,7 @@ Workspace root: ${workspaceRoot}
 Operating system: ${os}
 Shell: ${shell}
 ${projectContext ? `Project context:\n${projectContext}` : ''}
-
+${knowledgeBlock}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 AGENTIC BEHAVIOR RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -84,5 +91,6 @@ RESPONSE FORMAT
 - End every completed task with a short summary of changes made
 - If you cannot complete a task, explain exactly what's blocking you
 `;
+};
 
 module.exports = { buildSystemPrompt };

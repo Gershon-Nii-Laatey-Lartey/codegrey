@@ -1,17 +1,18 @@
 import {
   ArrowUp,
   Component,
-  Github,
+  AtSign,
   Mic,
   Monitor,
   Plus,
+  Paperclip,
   Plug,
   CornerDownRight,
-  MessageSquare,
   Terminal,
   X,
   Globe,
   Square,
+  MessageSquare,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Editor, { DiffEditor } from "@monaco-editor/react";
@@ -23,10 +24,14 @@ import { MessageRenderer } from "../components/chat/MessageRenderer";
 import { getSessionId, initSession, streamChat } from "../lib/aiClient";
 import { readWorkspaceLayout, writeWorkspaceLayout } from "../lib/workspaceLayout";
 import { DEFAULT_AI_SETTINGS, type AiSettings, type ChatMessage, type ChatMessagePart } from "../types/ai";
+import { createPatch } from "diff";
 
 type WorkspaceViewMode = "agent" | "split";
 const CHAT_TAB_ID = "__codegrey_chat__";
 const BROWSER_TAB_ID = "__codegrey_browser__";
+const LOGO_BASE = "https://id-preview--04de67e2-e451-4c83-88ee-80059e54f053.lovable.app/api/logo";
+
+
 
 export function Workspace({
   workspaceRoot,
@@ -45,6 +50,7 @@ export function Workspace({
   onConversationCreated,
   onCloseConversation,
   onClearSelectedFile,
+  onOpenMcpSettings,
 }: {
   workspaceRoot: string | null;
   selectedFile: string | null;
@@ -62,6 +68,7 @@ export function Workspace({
   onConversationCreated?: (id: string) => void;
   onCloseConversation?: () => void;
   onClearSelectedFile?: () => void;
+  onOpenMcpSettings?: () => void;
 }) {
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -227,12 +234,12 @@ export function Workspace({
         description = "";
       }
       void initSession({
-        sessionId: sessionIdRef.current,
+        sessionId: activeConversationId || sessionIdRef.current,
         workspaceRoot,
         projectContext: { description },
       }).catch(() => undefined);
     });
-  }, [workspaceRoot]);
+  }, [workspaceRoot, activeConversationId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -363,7 +370,7 @@ export function Workspace({
     let targetConvId = activeConversationId;
     let isFirstMessage = false;
     let pendingOnCreated: string | null = null;
-    
+
     if (!targetConvId && activeWorkspaceId) {
       const newConv = await window.codegrey?.brain?.createConversation?.(activeWorkspaceId, "New Chat");
       if (newConv) {
@@ -378,7 +385,7 @@ export function Workspace({
 
     setMessages((prev) => [...prev, userMessage, assistantMessage]);
     setAgentRunning(true);
-    
+
     if (pendingOnCreated) {
       onConversationCreated?.(pendingOnCreated);
     }
@@ -394,7 +401,7 @@ export function Workspace({
 
     try {
       await streamChat({
-        sessionId: sessionIdRef.current,
+        sessionId: activeConversationId || sessionIdRef.current,
         message: text,
         workspaceRoot,
         aiSettings,
@@ -452,7 +459,7 @@ export function Workspace({
             void window.codegrey?.workspace?.writeFile?.(event.filePath, event.newContent).then(() => {
               window.dispatchEvent(new CustomEvent('codegrey:explorer-refresh'));
             });
-            
+
             updateAssistantParts(assistantId, (parts) => [
               ...parts,
               {
@@ -835,6 +842,7 @@ export function Workspace({
     // File is already on disk, just finalize status
     updateProposal(id, (part) => ({ ...part, status: "accepted", error: undefined }));
     window.dispatchEvent(new CustomEvent('codegrey:explorer-refresh'));
+    window.dispatchEvent(new CustomEvent('codegrey:stats-refresh'));
     if (activeTab === proposal.filePath) setFileText(proposal.newContent);
     if (reviewProposalId === id) setReviewProposalId(null);
   };
@@ -842,7 +850,7 @@ export function Workspace({
   const rejectProposal = async (id: string) => {
     const proposal = allProposals.find((item) => item.id === id);
     if (!proposal) return;
-    
+
     // Revert file on disk
     if (proposal.oldContent === "") {
       // It was a new file, delete it
@@ -851,7 +859,8 @@ export function Workspace({
       await window.codegrey?.workspace?.writeFile?.(proposal.filePath, proposal.oldContent);
     }
     window.dispatchEvent(new CustomEvent('codegrey:explorer-refresh'));
-    
+    window.dispatchEvent(new CustomEvent('codegrey:stats-refresh'));
+
     updateProposal(id, (part) => ({ ...part, status: "rejected" }));
     if (activeTab === proposal.filePath) setFileText(proposal.oldContent);
     if (reviewProposalId === id) setReviewProposalId(null);
@@ -987,21 +996,18 @@ export function Workspace({
           </div>
           <div className="chat-input-actions-row">
             <div className="action-group">
-              <button className="icon-btn" data-tooltip="Coming Soon" type="button">
-                <Plus size={s} />
+              <button className="icon-btn" data-tooltip="Attach Image" type="button">
+                <Paperclip size={s} />
               </button>
-              <button className="icon-btn" data-tooltip="Coming Soon" type="button">
-                <Github size={s} />
+              <button className="icon-btn" data-tooltip="Attach Context" type="button">
+                <AtSign size={s} />
               </button>
-              <button className="icon-btn" data-tooltip="Coming Soon" type="button">
+              <button className="icon-btn" data-tooltip="Terminal Context" type="button">
                 <Monitor size={s} />
               </button>
             </div>
             <div className="action-group">
-              <button className="icon-btn" data-tooltip="Coming Soon" type="button">
-                <MessageSquare size={s} />
-              </button>
-              <button className="icon-btn" data-tooltip="Coming Soon" type="button">
+              <button className="icon-btn" data-tooltip="Voice Input" type="button">
                 <Mic size={s} />
               </button>
               <button
@@ -1021,20 +1027,35 @@ export function Workspace({
         {pendingProposals.length ? (
           <div className="chat-tray pending-changes-tray">
             <div className="pending-file-chips">
-              {pendingProposals.map((proposal) => (
-                <button
-                  key={proposal.id}
-                  className="pending-file-chip"
-                  type="button"
-                  onClick={() => {
-                    setReviewProposalId(proposal.id);
-                    setOpenTabs(prev => prev.includes(proposal.filePath) ? prev : [...prev, proposal.filePath]);
-                    setActiveTab(proposal.filePath);
-                  }}
-                >
-                  {shortName(proposal.filePath)}
-                </button>
-              ))}
+              {pendingProposals.map((proposal) => {
+                const patch = createPatch(proposal.filePath, proposal.oldContent, proposal.newContent, "", "");
+                const lines = patch.split("\n");
+                let added = 0;
+                let removed = 0;
+                lines.forEach(line => {
+                  if (line.startsWith("+") && !line.startsWith("+++")) added++;
+                  if (line.startsWith("-") && !line.startsWith("---")) removed++;
+                });
+
+                return (
+                  <button
+                    key={proposal.id}
+                    className="pending-file-chip"
+                    type="button"
+                    onClick={() => {
+                      setReviewProposalId(proposal.id);
+                      setOpenTabs(prev => prev.includes(proposal.filePath) ? prev : [...prev, proposal.filePath]);
+                      setActiveTab(proposal.filePath);
+                    }}
+                  >
+                    <span className="pending-file-name">{shortName(proposal.filePath)}</span>
+                    <span className="pending-file-stats">
+                      <span className="stat-add">+{added}</span>
+                      <span className="stat-del">-{removed}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
             <button className="accept-all-btn" type="button" onClick={() => void acceptAllProposals()}>
               Accept all
@@ -1042,21 +1063,21 @@ export function Workspace({
           </div>
         ) : (
           <div className="chat-tray">
-            <button className="tray-btn" type="button">
+            <button className="tray-btn" type="button" onClick={() => onOpenMcpSettings?.()}>
               <Plug size={ts} />
               <span>Connect your tools</span>
             </button>
 
             <div className="tray-right">
-              <div className="mcp-icons">
+              <div className="mcp-icons" onClick={() => onOpenMcpSettings?.()} style={{ cursor: "pointer" }}>
                 <div className="mcp-icon" style={{ zIndex: 5 }}>
-                  <Component size={ts} />
+                  <img src={`${LOGO_BASE}/supabase.svg`} alt="Supabase" style={{ width: ts, height: ts }} />
                 </div>
                 <div className="mcp-icon" style={{ marginLeft: "-6px", zIndex: 4 }}>
-                  <Component size={ts} />
+                  <img src={`${LOGO_BASE}/slack.svg`} alt="Slack" style={{ width: ts, height: ts }} />
                 </div>
                 <div className="mcp-icon" style={{ marginLeft: "-6px", zIndex: 3 }}>
-                  <Component size={ts} />
+                  <img src={`${LOGO_BASE}/cloudflare.svg`} alt="Cloudflare" style={{ width: ts, height: ts }} />
                 </div>
               </div>
               <button className="dismiss-btn" type="button">
@@ -1106,14 +1127,15 @@ export function Workspace({
               }}
               onMount={handleEditorDidMount}
             />
-          </div>
-          <div className="diff-floating-actions" role="group" aria-label="Review proposed file changes">
-            <button type="button" className="diff-floating-btn danger" onClick={() => rejectProposal(reviewProposal.id)}>
-              Reject
-            </button>
-            <button type="button" className="diff-floating-btn primary" onClick={() => void acceptProposal(reviewProposal.id)}>
-              Accept
-            </button>
+
+            <div className="diff-floating-actions" role="group" aria-label="Review proposed file changes">
+              <button type="button" className="diff-floating-btn danger" onClick={() => rejectProposal(reviewProposal.id)}>
+                Reject
+              </button>
+              <button type="button" className="diff-floating-btn primary" onClick={() => void acceptProposal(reviewProposal.id)}>
+                Accept
+              </button>
+            </div>
           </div>
         </div>
       );

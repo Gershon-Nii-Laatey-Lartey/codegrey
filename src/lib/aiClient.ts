@@ -36,6 +36,7 @@ export async function streamChat(opts: {
   sessionId: string;
   message: string;
   workspaceRoot: string;
+  workspaceId?: string | null;
   aiSettings: AiSettings;
   agentMode: "propose" | "auto";
   editorContext?: { openFile?: string; cursorLine?: number; selection?: string; visibleFiles?: string[] };
@@ -49,6 +50,7 @@ export async function streamChat(opts: {
       sessionId: opts.sessionId,
       message: opts.message,
       workspaceRoot: opts.workspaceRoot,
+      workspaceId: opts.workspaceId ?? null,
       editorContext: opts.editorContext,
       aiSettings: opts.aiSettings,
       agentMode: opts.agentMode,

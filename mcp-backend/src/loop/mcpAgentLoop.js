@@ -11,10 +11,10 @@
  * Everything else (streaming, iteration, history) is identical to the base loop.
  */
 
-const { TOOL_DEFINITIONS } = require("../../backend/src/tools/definitions");
-const { ToolExecutor } = require("../../backend/src/tools/executor");
-const { buildSystemPrompt } = require("../../backend/src/prompts/system");
-const { createProvider } = require("../../backend/src/providers/index");
+const { TOOL_DEFINITIONS } = require("../../../backend/src/tools/definitions");
+const { ToolExecutor } = require("../../../backend/src/tools/executor");
+const { buildSystemPrompt } = require("../../../backend/src/prompts/system");
+const { createProvider } = require("../../../backend/src/providers/index");
 
 const MAX_ITERATIONS = 50;
 

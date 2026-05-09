@@ -63,7 +63,7 @@ function getOrCreateSession(sessionId) {
  *   data: {"type": "error", "message": "..."}          — Error
  */
 router.post("/agent/chat", async (req, res) => {
-  const { sessionId, message, workspaceRoot, editorContext, aiSettings, agentMode = "propose" } = req.body;
+  const { sessionId, message, workspaceRoot, editorContext, aiSettings, agentMode = "propose", workspaceId } = req.body;
 
   if (!sessionId || !message) {
     return res.status(400).json({ error: "sessionId and message are required" });
@@ -108,6 +108,7 @@ router.post("/agent/chat", async (req, res) => {
       userMessage: enrichedMessage,
       conversationHistory: session.history,
       workspaceRoot: session.workspaceRoot,
+      workspaceId: workspaceId || null,
       projectContext: session.projectContext,
       aiSettings,
       agentMode,

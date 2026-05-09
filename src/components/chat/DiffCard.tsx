@@ -83,21 +83,46 @@ export function DiffCard({
         <>
           <div className="diff-content-wrapper" style={{ maxHeight: viewMode === "peek" ? '120px' : 'none' }}>
             <pre className="diff-lines">
-              {lines.slice(4).map((line, index) => {
-                const isAdded = line.startsWith("+");
-                const isRemoved = line.startsWith("-");
-                const isHunk = line.startsWith("@@");
+              {(() => {
+                let oldLine = 0;
+                let newLine = 0;
                 
-                return (
-                  <div
-                    key={`${index}-${line}`}
-                    className={`diff-line-row ${isAdded ? "added" : isRemoved ? "removed" : isHunk ? "hunk" : ""}`}
-                  >
-                    <span className="diff-line-prefix">{line[0] || " "}</span>
-                    <span className="diff-line-text">{line.slice(1) || " "}</span>
-                  </div>
-                );
-              })}
+                return lines.slice(4).map((line, index) => {
+                  const isAdded = line.startsWith("+");
+                  const isRemoved = line.startsWith("-");
+                  const isHunk = line.startsWith("@@");
+                  
+                  if (isHunk) {
+                    const match = line.match(/@@ -(\d+),?\d* \+(\d+),?\d* @@/);
+                    if (match) {
+                      oldLine = parseInt(match[1], 10);
+                      newLine = parseInt(match[2], 10);
+                    }
+                    return (
+                      <div key={index} className="diff-line-row hunk">
+                        <span className="diff-line-number hunk"></span>
+                        <span className="diff-line-prefix">{line[0]}</span>
+                        <span className="diff-line-text">{line.slice(1)}</span>
+                      </div>
+                    );
+                  }
+
+                  const displayOld = isAdded ? "" : oldLine++;
+                  const displayNew = isRemoved ? "" : newLine++;
+
+                  return (
+                    <div
+                      key={index}
+                      className={`diff-line-row ${isAdded ? "added" : isRemoved ? "removed" : ""}`}
+                    >
+                      <span className="diff-line-number">{displayOld}</span>
+                      <span className="diff-line-number">{displayNew}</span>
+                      <span className="diff-line-prefix">{line[0] || " "}</span>
+                      <span className="diff-line-text">{line.slice(1) || " "}</span>
+                    </div>
+                  );
+                });
+              })()}
             </pre>
           </div>
 
