@@ -63,7 +63,7 @@ function getOrCreateSession(sessionId) {
  *   data: {"type": "error", "message": "..."}          — Error
  */
 router.post("/agent/chat", async (req, res) => {
-  const { sessionId, message, workspaceRoot, editorContext, aiSettings, agentMode = "propose", workspaceId } = req.body;
+  const { sessionId, message, images = [], workspaceRoot, editorContext, aiSettings, agentMode = "propose", workspaceId } = req.body;
 
   if (!sessionId || !message) {
     return res.status(400).json({ error: "sessionId and message are required" });
@@ -97,10 +97,24 @@ router.post("/agent/chat", async (req, res) => {
   session.workspaceRoot = workspaceRoot;
 
   // Build enriched message with editor context
-  let enrichedMessage = message;
+  let enrichedText = message;
   if (editorContext) {
     const ctx = buildEditorContext(editorContext);
-    if (ctx) enrichedMessage = `${ctx}\n\n${message}`;
+    if (ctx) enrichedText = `${ctx}\n\n${message}`;
+  }
+
+  // Build userMessage: string for text-only, content array when images attached
+  let enrichedMessage;
+  if (images && images.length > 0) {
+    enrichedMessage = [
+      ...images.map((img) => ({
+        type: "image",
+        source: { type: "base64", media_type: img.mimeType || "image/png", data: img.base64 },
+      })),
+      { type: "text", text: enrichedText },
+    ];
+  } else {
+    enrichedMessage = enrichedText;
   }
 
   try {

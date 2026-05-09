@@ -5874,3 +5874,96 @@ input:checked + .mcp-toggle-slider:before {
 }
 
 .sidebar-knowledge-mini p { margin: 0; font-size: 11px; }
+
+/* ── Attachment preview strip ──────────────────────────────────────────── */
+
+.attach-preview-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.attach-preview-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px 3px 4px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.09);
+  font-size: 11px;
+  color: var(--muted-strong);
+  max-width: 180px;
+}
+
+.attach-thumb {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.attach-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.attach-chip-remove {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.attach-chip-remove:hover {
+  background: rgba(255,255,255,0.1);
+  color: var(--text);
+}
+
+/* Drag-over highlight on composer */
+.chat-input-wrapper[data-dragover="true"] .chat-input-card {
+  border-color: rgba(116,168,255,0.4);
+  background: rgba(116,168,255,0.04);
+}
+
+.chat-input-wrapper[data-dragover="true"] .chat-input-card::after {
+  content: "Drop files or images here";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: rgba(116,168,255,0.8);
+  pointer-events: none;
+  background: rgba(116,168,255,0.04);
+  border-radius: inherit;
+}
+
+/* User message image attachments */
+.user-message-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.user-message-thumb {
+  max-width: 180px;
+  max-height: 140px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.08);
+}

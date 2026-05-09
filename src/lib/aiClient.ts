@@ -35,6 +35,7 @@ export async function clearSession(sessionId: string) {
 export async function streamChat(opts: {
   sessionId: string;
   message: string;
+  images?: Array<{ base64: string; mimeType: string }>;
   workspaceRoot: string;
   workspaceId?: string | null;
   aiSettings: AiSettings;
@@ -49,6 +50,7 @@ export async function streamChat(opts: {
     body: JSON.stringify({
       sessionId: opts.sessionId,
       message: opts.message,
+      images: opts.images ?? [],
       workspaceRoot: opts.workspaceRoot,
       workspaceId: opts.workspaceId ?? null,
       editorContext: opts.editorContext,

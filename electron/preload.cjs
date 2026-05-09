@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld("codegrey", {
     openFolderByPath: (targetPath) => ipcRenderer.invoke("workspace:openFolderByPath", targetPath),
     listDir: (dirPath) => ipcRenderer.invoke("workspace:listDir", dirPath),
     readFile: (filePath) => ipcRenderer.invoke("workspace:readFile", filePath),
+    readFileBinary: (filePath) => ipcRenderer.invoke("workspace:readFileBinary", filePath),
     writeFile: (filePath, content) => ipcRenderer.invoke("workspace:writeFile", filePath, content),
     deleteFile: (filePath) => ipcRenderer.invoke("workspace:deleteFile", filePath),
     createEntry: (parentDir, name, isDir) => ipcRenderer.invoke("workspace:createEntry", parentDir, name, isDir),

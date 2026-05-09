@@ -276,27 +276,30 @@ router.post("/skills/:id/install", (req, res) => {
 // DELETE /api/skills/:id/uninstall
 router.delete("/skills/:id/uninstall", (req, res) => {
   const store = loadStore();
-  // Find the skill before removing so we can delete the file
-  const entry = (store.installedSkills || []).find((s) => s.skillId === req.params.id);
   store.installedSkills = (store.installedSkills || []).filter((s) => s.skillId !== req.params.id);
   saveStore(store);
 
-  // Remove skill file from any workspace that has it
-  if (entry) {
+  // Delete the skill file from workspace
+  const deleted = [];
+  const wr = req.query.workspaceRoot;
+  if (wr) {
     try {
-      // Attempt to clean up if workspaceRoot can be inferred
-      // (the frontend should pass workspaceRoot as query param on uninstall)
-      const wr = req.query.workspaceRoot;
-      if (wr) {
-        const filePath = path.join(wr, ".codegrey", "skills", `${req.params.id}.md`);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      const filePath = path.join(String(wr), ".codegrey", "skills", `${req.params.id}.md`);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        deleted.push(filePath);
+        // If skills dir is now empty, remove it too (optional cleanup)
+        const skillsDir = path.dirname(filePath);
+        try {
+          if (fs.readdirSync(skillsDir).length === 0) fs.rmdirSync(skillsDir);
+        } catch (_) {}
       }
     } catch (err) {
       console.warn("[knowledge] Could not remove skill file:", err.message);
     }
   }
 
-  res.json({ uninstalled: true });
+  res.json({ uninstalled: true, deleted });
 });
 
 module.exports = router;

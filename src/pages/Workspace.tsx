@@ -13,6 +13,8 @@ import {
   Globe,
   Square,
   MessageSquare,
+  FileText,
+  ImageIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Editor, { DiffEditor } from "@monaco-editor/react";
@@ -75,6 +77,10 @@ export function Workspace({
   const [fileText, setFileText] = useState<string>("");
   const [monacoLanguage, setMonacoLanguage] = useState<string>("plaintext");
   const [value, setValue] = useState("");
+  const [attachedImages, setAttachedImages] = useState<Array<{ name: string; dataUrl: string; base64: string; mimeType: string }>>([]);
+  const [attachedContextFiles, setAttachedContextFiles] = useState<string[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatTabVisible, setChatTabVisible] = useState(false);
   const [continuePromptVisible, setContinuePromptVisible] = useState(false);
@@ -344,6 +350,98 @@ export function Workspace({
     );
   };
 
+  // ── Attachment helpers ─────────────────────────────────────────────────
+  const processImageFiles = (files: FileList | File[]) => {
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith("image/")) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        const base64 = dataUrl.split(",")[1];
+        setAttachedImages((prev) => [
+          ...prev,
+          { name: file.name, dataUrl, base64, mimeType: file.type },
+        ]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const processDroppedPaths = async (paths: string[]) => {
+    for (const p of paths) {
+      const ext = p.split(".").pop()?.toLowerCase() ?? "";
+      const imageExts = ["png", "jpg", "jpeg", "gif", "webp", "svg"];
+      if (imageExts.includes(ext)) {
+        // Read image via Electron IPC
+        const mimeMap: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" };
+        const mimeType = mimeMap[ext] || "image/png";
+        try {
+          const result = await (window as any).codegrey?.workspace?.readFileBinary?.(p);
+          if (result?.base64) {
+            const dataUrl = `data:${mimeType};base64,${result.base64}`;
+            setAttachedImages((prev) => [
+              ...prev,
+              { name: p.split(/[\/]/).pop() || p, dataUrl, base64: result.base64, mimeType },
+            ]);
+          }
+        } catch (_) {}
+      } else {
+        // Treat as context file
+        setAttachedContextFiles((prev) => prev.includes(p) ? prev : [...prev, p]);
+      }
+    }
+  };
+
+  const handleComposerDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleComposerDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleComposerDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    // Handle image files dragged from outside the app
+    if (e.dataTransfer.files.length > 0) {
+      processImageFiles(e.dataTransfer.files);
+    }
+
+    // Handle paths dragged from inside the app (sidebar)
+    const pathData = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("application/x-codegrey-path");
+    if (pathData) {
+      await processDroppedPaths(pathData.split("\n").map((p) => p.trim()).filter(Boolean));
+    }
+  };
+
+  const handleAttachImage = () => {
+    imageInputRef.current?.click();
+  };
+
+  const handleImageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) processImageFiles(e.target.files);
+    e.target.value = "";
+  };
+
+  const handleAttachContext = async () => {
+    if (!workspaceRoot) return;
+    const result = await window.codegrey?.workspace?.openFile?.();
+    if (result?.filePath) {
+      setAttachedContextFiles((prev) => prev.includes(result.filePath) ? prev : [...prev, result.filePath]);
+    }
+  };
+
+  const removeImage = (idx: number) => setAttachedImages((prev) => prev.filter((_, i) => i !== idx));
+  const removeContext = (path: string) => setAttachedContextFiles((prev) => prev.filter((p) => p !== path));
+
+  // ── End attachment helpers ──────────────────────────────────────────────
+
   const send = async () => {
     const text = value.trim();
     if (!text || !workspaceRoot || agentRunning) return;
@@ -352,10 +450,27 @@ export function Workspace({
     const contextFile = sentFromFile ? activeTab : null;
     const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const assistantId = crypto.randomUUID();
+    // Build user message parts (text + images)
+    const userParts: ChatMessagePart[] = [];
+    for (const img of attachedImages) {
+      userParts.push({ type: "image", dataUrl: img.dataUrl, mimeType: img.mimeType, name: img.name } as any);
+    }
+    userParts.push({ type: "text", content: text });
+
+    // Build context annotation for attached files
+    const contextNote = attachedContextFiles.length > 0
+      ? `
+
+[Context files: ${attachedContextFiles.join(", ")}]`
+      : "";
+    if (contextNote && userParts[userParts.length - 1].type === "text") {
+      (userParts[userParts.length - 1] as any).content += contextNote;
+    }
+
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
-      parts: [{ type: "text", content: text }],
+      parts: userParts,
       timestamp: now,
       contextFile,
     };
@@ -398,11 +513,16 @@ export function Workspace({
       setActiveTab(CHAT_TAB_ID);
     }
     setValue("");
+    setAttachedImages([]);
+    setAttachedContextFiles([]);
 
     try {
       await streamChat({
         sessionId: activeConversationId || sessionIdRef.current,
-        message: text,
+        message: attachedContextFiles.length > 0
+          ? `${text}\n\n[Attached context files: ${attachedContextFiles.join(", ")}]`
+          : text,
+        images: attachedImages.map((img) => ({ base64: img.base64, mimeType: img.mimeType })),
         workspaceRoot,
         aiSettings,
         agentMode: aiSettings.autoApply ? "auto" : "propose",
@@ -963,7 +1083,22 @@ export function Workspace({
         : "Ask me to build a feature, debug a problem, or explain your code...";
 
     return (
-      <div className="chat-input-wrapper" data-placement={placement}>
+      <div
+        className="chat-input-wrapper"
+        data-placement={placement}
+        data-dragover={isDragOver ? "true" : undefined}
+        onDragOver={handleComposerDragOver}
+        onDragLeave={handleComposerDragLeave}
+        onDrop={handleComposerDrop}
+      >
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          style={{ display: "none" }}
+          onChange={handleImageInputChange}
+        />
         {placement === "float" && continuePromptVisible && (
           <div className="chat-input-header-pill">
             <button
@@ -977,6 +1112,24 @@ export function Workspace({
           </div>
         )}
         <div className="chat-input-card">
+          {(attachedImages.length > 0 || attachedContextFiles.length > 0) && (
+            <div className="attach-preview-strip">
+              {attachedImages.map((img, i) => (
+                <div key={i} className="attach-preview-chip attach-preview-image">
+                  <img src={img.dataUrl} alt={img.name} className="attach-thumb" />
+                  <span className="attach-chip-name">{img.name}</span>
+                  <button type="button" className="attach-chip-remove" onClick={() => removeImage(i)}><X size={10} /></button>
+                </div>
+              ))}
+              {attachedContextFiles.map((p) => (
+                <div key={p} className="attach-preview-chip attach-preview-file">
+                  <FileText size={11} />
+                  <span className="attach-chip-name">{p.split(/[\/]/).pop()}</span>
+                  <button type="button" className="attach-chip-remove" onClick={() => removeContext(p)}><X size={10} /></button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="chat-input-top">
             <textarea
               ref={taRef}
@@ -996,10 +1149,10 @@ export function Workspace({
           </div>
           <div className="chat-input-actions-row">
             <div className="action-group">
-              <button className="icon-btn" data-tooltip="Attach Image" type="button">
+              <button className="icon-btn" data-tooltip="Attach Image" type="button" onClick={handleAttachImage}>
                 <Paperclip size={s} />
               </button>
-              <button className="icon-btn" data-tooltip="Attach Context" type="button">
+              <button className="icon-btn" data-tooltip="Attach Context File" type="button" onClick={() => void handleAttachContext()}>
                 <AtSign size={s} />
               </button>
               <button className="icon-btn" data-tooltip="Terminal Context" type="button">

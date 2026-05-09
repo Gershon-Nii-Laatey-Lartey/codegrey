@@ -201,6 +201,13 @@ export function ExplorerTree({
             className="explorer-row-main"
             data-active-folder={entry.isDir && activeFolder === entry.path ? "true" : "false"}
             style={{ paddingLeft: `${indent}px` }}
+            draggable={!entry.isDir}
+            onDragStart={(e) => {
+              if (entry.isDir) return;
+              e.dataTransfer.setData("text/plain", entry.path);
+              e.dataTransfer.setData("application/x-codegrey-path", entry.path);
+              e.dataTransfer.effectAllowed = "copy";
+            }}
             onClick={() => {
               if (editingPath === entry.path) return;
               activateEntry(entry);

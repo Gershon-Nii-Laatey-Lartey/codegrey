@@ -19,6 +19,7 @@ export function MessageRenderer({
 }) {
   if (message.role === "user") {
     const content = message.parts.find((part) => part.type === "text")?.content || "";
+    const imageParts = message.parts.filter((part) => (part as any).type === "image");
     return (
       <article className="chat-message" data-role="user">
         <div className="user-message-card">
@@ -29,6 +30,13 @@ export function MessageRenderer({
                 <span>{shortName(message.contextFile)}</span>
               </div>
             ) : null}
+            {imageParts.length > 0 && (
+              <div className="user-message-images">
+                {imageParts.map((img: any, i: number) => (
+                  <img key={i} src={img.dataUrl} alt={img.name || "attachment"} className="user-message-thumb" />
+                ))}
+              </div>
+            )}
             <p>{content}</p>
           </div>
           <button type="button" className="user-undo-btn">

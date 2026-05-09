@@ -284,6 +284,10 @@ export function App() {
     setActiveConversationId(null);
     setSelectedFile(path);
     setSelectedFileRequest((request) => request + 1);
+    // Close any overlay page so the file is immediately visible
+    if (view !== "workspace" && view !== "onboarding") {
+      setView("workspace");
+    }
   };
 
   const basename = (filePath: string) => filePath.split(/[/\\]/).filter(Boolean).pop() || filePath;
@@ -816,9 +820,17 @@ export function App() {
               <button
                 className="title-action-btn"
                 type="button"
+                data-tooltip="Home"
+                onClick={() => setView(workspaceRoot ? "workspace" : "onboarding")}
+              >
+                <FolderOpen size={15} />
+              </button>
+              <button
+                className="title-action-btn"
+                type="button"
                 data-tooltip="Open Browser"
                 onClick={() => {
-                  if (view === "settings" || view === "mcp-settings") setView("workspace");
+                  if (view !== "workspace") setView("workspace");
                   setBrowserTabRequest(c => c + 1);
                 }}
               >
@@ -829,7 +841,7 @@ export function App() {
                 type="button"
                 data-tooltip={terminalOpen ? "Close Terminal" : "Open Terminal"}
                 onClick={() => {
-                  if (view === "settings" || view === "mcp-settings") setView("workspace");
+                  if (view !== "workspace") setView("workspace");
                   toggleTerminal();
                 }}
               >
@@ -841,7 +853,7 @@ export function App() {
                 data-active={workspaceViewMode === "split" ? "true" : "false"}
                 data-tooltip={workspaceViewMode === "agent" ? "Switch to Split View" : "Switch to Agent View"}
                 onClick={() => {
-                  if (view === "settings" || view === "mcp-settings") setView("workspace");
+                  if (view !== "workspace") setView("workspace");
                   toggleWorkspaceViewMode();
                 }}
               >
@@ -852,7 +864,7 @@ export function App() {
                 type="button" 
                 data-tooltip="Run Code"
                 onClick={() => {
-                  if (view === "settings" || view === "mcp-settings") setView("workspace");
+                  if (view !== "workspace") setView("workspace");
                   // run logic here if any
                 }}
               >

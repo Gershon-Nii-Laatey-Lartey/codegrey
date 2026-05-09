@@ -585,6 +585,19 @@ app.whenReady().then(async () => {
     }
   });
 
+  ipcMain.handle("workspace:readFileBinary", (event, filePath) => {
+    if (typeof filePath !== "string") return null;
+    try {
+      const stat = fs.statSync(filePath);
+      if (!stat.isFile()) return null;
+      if (stat.size > 1024 * 1024 * 10) return null; // 10MB limit
+      const buf = fs.readFileSync(filePath);
+      return { base64: buf.toString("base64") };
+    } catch {
+      return null;
+    }
+  });
+
   ipcMain.handle("workspace:readFile", (event, filePath) => {
     if (!workspaceRoot) return null;
     if (typeof filePath !== "string") return null;
