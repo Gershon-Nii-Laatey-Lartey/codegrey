@@ -917,9 +917,14 @@ app.whenReady().then(async () => {
 
         try {
           const supabaseUrl = process.env.CODEGREY_SUPABASE_URL || "https://fdizzpftrynhlaawsjpq.supabase.co";
+          const supabaseAnonKey = process.env.CODEGREY_SUPABASE_ANON_KEY || "";
           const resp = await fetch(`${supabaseUrl}/functions/v1/desktop-exchange`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": supabaseAnonKey,
+              "Authorization": `Bearer ${supabaseAnonKey}`,
+            },
             body: JSON.stringify({ code }),
           });
           const data = await resp.json();
