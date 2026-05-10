@@ -916,8 +916,8 @@ app.whenReady().then(async () => {
         }
 
         try {
-          const websiteUrl = process.env.CODEGREY_WEBSITE_URL || "https://codegreyapp.vercel.app";
-          const resp = await fetch(`${websiteUrl}/api/public/desktop/exchange`, {
+          const supabaseUrl = process.env.CODEGREY_SUPABASE_URL || "https://fdizzpftrynhlaawsjpq.supabase.co";
+          const resp = await fetch(`${supabaseUrl}/functions/v1/desktop-exchange`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ code }),
