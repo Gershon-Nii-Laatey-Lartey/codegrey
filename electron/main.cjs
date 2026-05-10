@@ -895,7 +895,7 @@ app.whenReady().then(async () => {
         if (retState !== state || !code) return reject(new Error("state_mismatch or missing code"));
 
         try {
-          const resp = await fetch(`${process.env.CODEGREY_WEBSITE_URL || "https://codegreyapp.vercel.app"}/api/public/desktop/exchange`, {
+          const resp = await fetch(`${process.env.CODEGREY_SUPABASE_URL}/functions/v1/desktop-exchange`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ code }),
@@ -930,7 +930,7 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("auth:fetchAccount", async (event, accessToken) => {
-    const SUPABASE_URL = process.env.CODEGREY_SUPABASE_URL || "https://yvlccgopiyvitludrrnx.supabase.co";
+    const SUPABASE_URL = process.env.CODEGREY_SUPABASE_URL;
     const SUPABASE_KEY = process.env.CODEGREY_SUPABASE_ANON_KEY || "";
     const headers = {
       "apikey": SUPABASE_KEY,
