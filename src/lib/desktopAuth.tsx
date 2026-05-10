@@ -52,7 +52,7 @@ type AuthCtx = {
 
 const Ctx = createContext<AuthCtx>({} as AuthCtx);
 
-const WEBSITE = "https://project--f6cd3b6f-a0c3-4a56-b077-0a3c46d7c077.lovable.app";
+const WEBSITE = import.meta.env.VITE_WEBSITE_URL ?? "https://codegreyapp.vercel.app";
 
 export function DesktopAuthProvider({ children }: { children: ReactNode }) {
   const [auth, setAuth] = useState<AuthState>({

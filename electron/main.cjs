@@ -1,7 +1,7 @@
 const { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell, safeStorage, net } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
-const { execFile } = require("node:child_process");
+const { execFile, spawn } = require("node:child_process");
 const pty = require("node-pty");
 const { startServer: startBackendServer } = require("../backend/server");
 const { startServer: startMcpServer } = require("../mcp-backend/server");
@@ -558,6 +558,8 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("workspace:openFolder", async () => {
     const result = await dialog.showOpenDialog({
+      title: "Open Project Folder",
+      buttonLabel: "Open Folder",
       properties: ["openDirectory", "createDirectory"],
     });
     if (result.canceled || !result.filePaths?.[0]) return null;
@@ -569,6 +571,8 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("workspace:openFile", async () => {
     const result = await dialog.showOpenDialog({
+      title: "Open File",
+      buttonLabel: "Open File",
       properties: ["openFile"],
     });
     if (result.canceled || !result.filePaths?.[0]) return null;
@@ -775,19 +779,38 @@ app.whenReady().then(async () => {
     if (!repo) return { ok: false, error: "Repository URL is required." };
     let targetParent = typeof parentDir === "string" && parentDir.trim() ? parentDir : null;
     if (!targetParent) {
-      const result = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
-      if (result.canceled || !result.filePaths?.[0]) return { ok: false, error: "Choose a folder to clone into." };
+      const result = await dialog.showOpenDialog({
+        title: "Choose a folder to clone into",
+        buttonLabel: "Clone Here",
+        properties: ["openDirectory", "createDirectory"],
+      });
+      if (result.canceled || !result.filePaths?.[0]) return { ok: false, error: "No folder selected." };
       targetParent = result.filePaths[0];
     }
     try {
       fs.mkdirSync(targetParent, { recursive: true });
-      const result = await runGit(["clone", repo], targetParent);
-      if (!result.ok) return { ok: false, error: result.error || "Clone failed." };
+
+      // Stream git clone output back to renderer
+      const result = await new Promise((resolve) => {
+        const proc = spawn("git", ["clone", "--progress", repo], { cwd: targetParent, windowsHide: true });
+        const lines = [];
+        const send = (line) => {
+          lines.push(line);
+          event.sender.send("workspace:cloneProgress", { line: line.trim() });
+        };
+        proc.stdout.on("data", (d) => d.toString().split("\n").filter(Boolean).forEach(send));
+        proc.stderr.on("data", (d) => d.toString().split("\n").filter(Boolean).forEach(send));
+        proc.on("close", (code) => resolve({ ok: code === 0, stderr: lines.join("\n") }));
+        proc.on("error", (e) => resolve({ ok: false, error: e.message }));
+      });
+
+      if (!result.ok) return { ok: false, error: result.stderr || "Clone failed." };
       const guessedName = repo.replace(/\/+$/, "").split(/[/:\\]/).pop()?.replace(/\.git$/i, "") || "";
       const clonedPath = path.join(targetParent, guessedName);
-      setWorkspaceRoot(fs.existsSync(clonedPath) ? clonedPath : targetParent);
-      trackWorkspace(workspaceRoot, path.basename(workspaceRoot));
-      return { ok: true, path: workspaceRoot };
+      const finalPath = fs.existsSync(clonedPath) ? clonedPath : targetParent;
+      setWorkspaceRoot(finalPath);
+      trackWorkspace(finalPath, path.basename(finalPath));
+      return { ok: true, path: finalPath };
     } catch (e) {
       return { ok: false, error: e.message };
     }
@@ -872,7 +895,7 @@ app.whenReady().then(async () => {
         if (retState !== state || !code) return reject(new Error("state_mismatch or missing code"));
 
         try {
-          const resp = await fetch("https://project--f6cd3b6f-a0c3-4a56-b077-0a3c46d7c077.lovable.app/api/public/desktop/exchange", {
+          const resp = await fetch(`${process.env.CODEGREY_WEBSITE_URL || "https://codegreyapp.vercel.app"}/api/public/desktop/exchange`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ code }),
@@ -894,7 +917,7 @@ app.whenReady().then(async () => {
       server.listen(0, "127.0.0.1", () => {
         const port = server.address().port;
         const callback = `http://127.0.0.1:${port}/cb`;
-        const loginUrl = new URL("https://project--f6cd3b6f-a0c3-4a56-b077-0a3c46d7c077.lovable.app/auth/login");
+        const loginUrl = new URL(`${process.env.CODEGREY_WEBSITE_URL || "https://codegreyapp.vercel.app"}/auth/login`);
         loginUrl.searchParams.set("callback", callback);
         loginUrl.searchParams.set("state", state);
         loginUrl.searchParams.set("client", "Codegrey Desktop");
@@ -907,8 +930,8 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("auth:fetchAccount", async (event, accessToken) => {
-    const SUPABASE_URL = "https://yvlccgopiyvitludrrnx.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2bGNjZ29waXl2aXRsdWRycm54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwMDEwMTEsImV4cCI6MjA2MjU3NzAxMX0.CQ4dRIAU1nc7me2bI98WzHdBiRu9xfKUoeKVybw3kO0";
+    const SUPABASE_URL = process.env.CODEGREY_SUPABASE_URL || "https://yvlccgopiyvitludrrnx.supabase.co";
+    const SUPABASE_KEY = process.env.CODEGREY_SUPABASE_ANON_KEY || "";
     const headers = {
       "apikey": SUPABASE_KEY,
       "Authorization": `Bearer ${accessToken}`,

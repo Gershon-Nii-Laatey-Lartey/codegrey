@@ -6,6 +6,7 @@ import {
   LogOut,
   RefreshCw,
 } from "lucide-react";
+import { CodegreyLogo } from "../components/CodegreyLogo";
 import { useEffect } from "react";
 import { useDesktopAuth, BILLING_URL } from "../lib/desktopAuth";
 
@@ -107,7 +108,7 @@ export function Accounts({ onBack }: { onBack: () => void }) {
       <div className="settings-content account-content">
         {!auth.loggedIn ? (
           <div className="account-signed-out">
-            <div className="account-avatar account-avatar-lg">?</div>
+            <CodegreyLogo size={52} />
             <p className="account-signed-out-title">Not signed in</p>
             <p className="account-signed-out-sub">Sign in to sync usage, view your plan, and manage billing.</p>
             <button type="button" className="account-signin-btn" onClick={() => void signIn()}>Sign in with Codegrey</button>

@@ -176,8 +176,8 @@ export function App() {
     confirmLabel: string;
     action: () => void;
   } | null>(null);
-  const [cloneDialog, setCloneDialog] = useState<{ open: boolean; url: string; busy: boolean; error: string }>({
-    open: false, url: "", busy: false, error: "",
+  const [cloneDialog, setCloneDialog] = useState<{ open: boolean; url: string; busy: boolean; error: string; progress: string[] }>({
+    open: false, url: "", busy: false, error: "", progress: [],
   });
 
   const requestWorkspaceSwitch = (path: string, name: string, action: () => void) => {
@@ -382,19 +382,24 @@ export function App() {
       return result.path;
     }
     // No URL supplied — open the custom clone dialog
-    setCloneDialog({ open: true, url: "", busy: false, error: "" });
+    setCloneDialog({ open: true, url: "", busy: false, error: "", progress: [] });
     return null;
   };
 
   const doClone = async (url: string) => {
     if (!url.trim()) { setCloneDialog(d => ({ ...d, error: "Please enter a repository URL" })); return; }
-    setCloneDialog(d => ({ ...d, busy: true, error: "" }));
+    setCloneDialog(d => ({ ...d, busy: true, error: "", progress: [] }));
+    // Subscribe to streaming progress
+    const unsub = window.codegrey?.workspace?.onCloneProgress?.((msg: { line: string }) => {
+      setCloneDialog(d => ({ ...d, progress: [...d.progress.slice(-30), msg.line] }));
+    });
     const result = await window.codegrey?.workspace?.cloneRepo?.(url.trim());
+    unsub?.();
     if (!result?.ok || !result.path) {
       setCloneDialog(d => ({ ...d, busy: false, error: result?.error || "Clone failed" }));
       return;
     }
-    setCloneDialog({ open: false, url: "", busy: false, error: "" });
+    setCloneDialog({ open: false, url: "", busy: false, error: "", progress: [] });
     setWorkspaceRoot(result.path);
     setSelectedFile(null);
     setActiveConversationId(null);
@@ -626,10 +631,10 @@ export function App() {
                 <>
                   <p className="sidebar-message">You have not yet opened a folder.</p>
                   <button className="sidebar-btn sidebar-btn-primary" onClick={openFolder}>
-                    Open Folder
+                    Open a folder
                   </button>
                   <button className="sidebar-btn sidebar-btn-secondary" onClick={() => void cloneRepository()}>
-                    Clone Repository
+                    Clone a Git repo
                   </button>
                 </>
               ) : sidebarView === "search" ? (
@@ -963,57 +968,42 @@ export function App() {
           )}
 
           {cloneDialog.open && (
-            <div style={{
-              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999,
-              backgroundColor: 'rgba(0, 0, 0, 0.45)'
-            }}>
-              <div style={{
-                background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '12px', width: '420px', boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-                overflow: 'hidden'
-              }}>
-                <div style={{ padding: '18px 18px 12px' }}>
-                  <h3 style={{ margin: '0 0 6px', fontSize: '14px', fontWeight: 600, color: '#e5e5e5' }}>
-                    Clone Repository
-                  </h3>
-                  <p style={{ margin: '0 0 14px', fontSize: '12px', color: '#888', lineHeight: 1.5 }}>
-                    Enter a GitHub URL or <code style={{ fontFamily: 'monospace', color: '#aaa' }}>owner/repo</code> shorthand
+            <div className="clone-dialog-overlay">
+              <div className="clone-dialog">
+                <div className="clone-dialog-body">
+                  <h3 className="clone-dialog-title">Clone Repository</h3>
+                  <p className="clone-dialog-sub">
+                    Enter a GitHub URL or <code>owner/repo</code> shorthand
                   </p>
                   <input
                     type="text"
                     autoFocus
+                    className={`clone-dialog-input${cloneDialog.error ? " error" : ""}`}
                     placeholder="https://github.com/org/repo  or  org/repo"
                     value={cloneDialog.url}
+                    disabled={cloneDialog.busy}
                     onChange={e => setCloneDialog(d => ({ ...d, url: e.target.value, error: "" }))}
-                    onKeyDown={e => { if (e.key === "Enter") void doClone(cloneDialog.url); if (e.key === "Escape") setCloneDialog(d => ({ ...d, open: false })); }}
-                    style={{
-                      width: '100%', boxSizing: 'border-box',
-                      padding: '8px 10px', fontSize: '13px',
-                      background: '#111', color: '#e5e5e5',
-                      border: `1px solid ${cloneDialog.error ? '#d34a4a' : 'rgba(255,255,255,0.12)'}`,
-                      borderRadius: '7px', outline: 'none', fontFamily: 'inherit'
-                    }}
+                    onKeyDown={e => { if (e.key === "Enter") void doClone(cloneDialog.url); if (e.key === "Escape" && !cloneDialog.busy) setCloneDialog(d => ({ ...d, open: false })); }}
                   />
                   {cloneDialog.error && (
-                    <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#d34a4a' }}>{cloneDialog.error}</p>
+                    <p className="clone-dialog-error">{cloneDialog.error}</p>
+                  )}
+                  {cloneDialog.progress.length > 0 && (
+                    <div className="clone-dialog-log">
+                      {cloneDialog.progress.map((line, i) => (
+                        <div key={i} className="clone-dialog-log-line">{line}</div>
+                      ))}
+                    </div>
                   )}
                 </div>
-                <div style={{
-                  padding: '10px 18px 14px', display: 'flex', gap: '8px', justifyContent: 'flex-end'
-                }}>
-                  <button type="button" onClick={() => setCloneDialog(d => ({ ...d, open: false }))} style={{
-                    padding: '6px 16px', fontSize: '13px', fontWeight: 500,
-                    background: 'transparent', color: '#ccc',
-                    border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', cursor: 'pointer'
-                  }}>Cancel</button>
-                  <button type="button" onClick={() => void doClone(cloneDialog.url)} disabled={cloneDialog.busy} style={{
-                    padding: '6px 18px', fontSize: '13px', fontWeight: 600,
-                    background: '#2563eb', color: '#fff',
-                    border: 'none', borderRadius: '6px', cursor: cloneDialog.busy ? 'wait' : 'pointer',
-                    opacity: cloneDialog.busy ? 0.7 : 1
-                  }}>
-                    {cloneDialog.busy ? "Cloning…" : "Clone"}
+                <div className="clone-dialog-footer">
+                  <button type="button" className="clone-dialog-btn-cancel" disabled={cloneDialog.busy} onClick={() => !cloneDialog.busy && setCloneDialog(d => ({ ...d, open: false }))}>
+                    Cancel
+                  </button>
+                  <button type="button" className="clone-dialog-btn-primary" onClick={() => void doClone(cloneDialog.url)} disabled={cloneDialog.busy}>
+                    {cloneDialog.busy ? (
+                      <><span className="clone-spinner" />Cloning…</>
+                    ) : "Clone"}
                   </button>
                 </div>
               </div>

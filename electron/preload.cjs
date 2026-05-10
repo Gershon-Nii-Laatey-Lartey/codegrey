@@ -32,6 +32,11 @@ contextBridge.exposeInMainWorld("codegrey", {
     deleteEntry: (entryPath) => ipcRenderer.invoke("workspace:deleteEntry", entryPath),
     search: (query, opts) => ipcRenderer.invoke("workspace:search", query, opts),
     cloneRepo: (repoUrl, parentDir) => ipcRenderer.invoke("workspace:cloneRepo", repoUrl, parentDir),
+    onCloneProgress: (handler) => {
+      const listener = (_event, msg) => handler(msg);
+      ipcRenderer.on("workspace:cloneProgress", listener);
+      return () => ipcRenderer.removeListener("workspace:cloneProgress", listener);
+    },
   },
   git: {
     status: () => ipcRenderer.invoke("git:status"),

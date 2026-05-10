@@ -28,6 +28,7 @@ interface Window {
       deleteEntry?: (entryPath: string) => Promise<{ ok: boolean; error?: string }>;
       search?: (query: string, opts?: { include?: string; maxResults?: number }) => Promise<Array<{ filePath: string; line: number; preview: string }>>;
       cloneRepo?: (repoUrl: string, parentDir?: string | null) => Promise<{ ok: boolean; path?: string; error?: string }>;
+      onCloneProgress?: (handler: (msg: { line: string }) => void) => (() => void);
     };
     git?: {
       status: () => Promise<{ ok: boolean; branch?: string; files: Array<{ path: string; index: string; workingTree: string }>; error?: string }>;

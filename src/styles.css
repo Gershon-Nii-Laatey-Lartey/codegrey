@@ -6335,3 +6335,168 @@ input:checked + .mcp-toggle-slider:before {
   background: rgba(211,74,74,0.08);
   border-color: rgba(211,74,74,0.35);
 }
+
+/* ── Clone dialog ──────────────────────────────────────────────────────── */
+
+.clone-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(2px);
+}
+
+.clone-dialog {
+  background: #1a1a1a;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.7);
+  overflow: hidden;
+}
+
+.clone-dialog-body {
+  padding: 20px 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.clone-dialog-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e5e5e5;
+}
+
+.clone-dialog-sub {
+  margin: 0;
+  font-size: 12px;
+  color: #888;
+  line-height: 1.5;
+}
+
+.clone-dialog-sub code {
+  font-family: monospace;
+  color: #aaa;
+}
+
+.clone-dialog-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #111;
+  color: #e5e5e5;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 7px;
+  outline: none;
+  transition: border-color 150ms;
+}
+
+.clone-dialog-input:focus { border-color: rgba(255,255,255,0.28); }
+.clone-dialog-input.error { border-color: #d34a4a; }
+.clone-dialog-input:disabled { opacity: 0.5; }
+
+.clone-dialog-error {
+  margin: 0;
+  font-size: 12px;
+  color: #ff8d8d;
+}
+
+.clone-dialog-log {
+  background: #0d0d0d;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 6px;
+  padding: 8px 10px;
+  max-height: 140px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.clone-dialog-log-line {
+  color: #aaa;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.clone-dialog-footer {
+  padding: 12px 20px 16px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.clone-dialog-btn-cancel {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  background: transparent;
+  color: #ccc;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 130ms;
+}
+
+.clone-dialog-btn-cancel:hover:not(:disabled) {
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+}
+
+.clone-dialog-btn-cancel:disabled { opacity: 0.4; cursor: default; }
+
+.clone-dialog-btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: opacity 130ms;
+}
+
+.clone-dialog-btn-primary:hover:not(:disabled) { opacity: 0.88; }
+.clone-dialog-btn-primary:disabled { opacity: 0.6; cursor: default; }
+
+.clone-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+/* Auth gate logo tweak */
+.auth-gate-logo {
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 0;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  margin-bottom: 20px;
+}
