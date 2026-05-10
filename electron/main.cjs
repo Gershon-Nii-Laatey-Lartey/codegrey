@@ -881,36 +881,58 @@ app.whenReady().then(async () => {
     const crypto = require("crypto");
     const state = crypto.randomUUID();
 
-    // Spin up a loopback server on a random port to receive the callback
+    // Auto-close HTML — closes the tab immediately after the redirect lands
+    const AUTO_CLOSE_HTML = `<!DOCTYPE html><html><head><title>Authorized</title>
+<style>*{margin:0;box-sizing:border-box}body{display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0a0a;font-family:system-ui,sans-serif;color:#e5e5e5}</style>
+<script>window.onload=function(){window.close();setTimeout(function(){window.open("","_self","");window.close();},200);}</script>
+</head><body><p style="font-size:14px;color:#888">Authorization complete. This window will close automatically.</p></body></html>`;
+
     return new Promise((resolve, reject) => {
+      let settled = false;
+      const settle = (fn) => { if (!settled) { settled = true; fn(); } };
+
       const server = http.createServer(async (req, res) => {
-        const url = new URL(req.url, "http://localhost");
+        const url = new URL(req.url, "http://127.0.0.1");
+
+        // Ignore favicon and any non-callback paths
+        if (url.pathname !== "/cb") {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+
+        // Always respond with the auto-close page first so the browser closes
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(AUTO_CLOSE_HTML);
+
         const code = url.searchParams.get("code");
         const retState = url.searchParams.get("state");
 
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(`<html><body style="font-family:system-ui;text-align:center;padding:60px;background:#0f0f0f;color:#e5e5e5"><h2>Authorized. You can close this tab.</h2></body></html>`);
-        server.close();
+        server.close(() => {}); // stop accepting new connections
 
-        if (retState !== state || !code) return reject(new Error("state_mismatch or missing code"));
+        if (!code || retState !== state) {
+          settle(() => reject(new Error("state_mismatch or missing code")));
+          return;
+        }
 
         try {
-          const resp = await fetch(`${process.env.CODEGREY_SUPABASE_URL}/functions/v1/desktop-exchange`, {
+          const websiteUrl = process.env.CODEGREY_WEBSITE_URL || "https://codegreyapp.vercel.app";
+          const resp = await fetch(`${websiteUrl}/api/public/desktop/exchange`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ code }),
           });
           const data = await resp.json();
-          if (data.error) return reject(new Error(data.error));
+          if (data.error) { settle(() => reject(new Error(data.error))); return; }
           saveAuthTokens({
             access_token: data.access_token,
             refresh_token: data.refresh_token,
             user: data.user,
             roles: data.roles,
           });
-          resolve(data);
+          settle(() => resolve(data));
         } catch (e) {
-          reject(e);
+          settle(() => reject(e));
         }
       });
 
@@ -924,8 +946,15 @@ app.whenReady().then(async () => {
         shell.openExternal(loginUrl.toString());
       });
 
+      server.on("error", (err) => {
+        settle(() => reject(new Error(`Loopback server error: ${err.message}`)));
+      });
+
       // Timeout after 5 min
-      setTimeout(() => { server.close(); reject(new Error("login_timeout")); }, 5 * 60 * 1000);
+      setTimeout(() => {
+        server.close(() => {});
+        settle(() => reject(new Error("login_timeout")));
+      }, 5 * 60 * 1000);
     });
   });
 
