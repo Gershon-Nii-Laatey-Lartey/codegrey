@@ -881,18 +881,25 @@ app.whenReady().then(async () => {
     const crypto = require("crypto");
     const state = crypto.randomUUID();
 
-    // Auto-close HTML — closes the tab immediately after the redirect lands
-    const AUTO_CLOSE_HTML = `<!DOCTYPE html><html><head><title>Authorized</title>
-<style>*{margin:0;box-sizing:border-box}body{display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0a0a;font-family:system-ui,sans-serif;color:#e5e5e5}</style>
-<script>window.onload=function(){window.close();setTimeout(function(){window.open("","_self","");window.close();},200);}</script>
-</head><body><p style="font-size:14px;color:#888">Authorization complete. This window will close automatically.</p></body></html>`;
-
     return new Promise((resolve, reject) => {
       let settled = false;
       const settle = (fn) => { if (!settled) { settled = true; fn(); } };
 
       const server = http.createServer(async (req, res) => {
         const url = new URL(req.url, "http://127.0.0.1");
+        const origin = req.headers.origin || "*";
+        const corsHeaders = {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Methods": "GET, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+        };
+
+        // Handle CORS preflight
+        if (req.method === "OPTIONS") {
+          res.writeHead(204, corsHeaders);
+          res.end();
+          return;
+        }
 
         // Ignore favicon and any non-callback paths
         if (url.pathname !== "/cb") {
@@ -901,9 +908,9 @@ app.whenReady().then(async () => {
           return;
         }
 
-        // Always respond with the auto-close page first so the browser closes
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(AUTO_CLOSE_HTML);
+        // Respond with CORS headers so the website success page fetch succeeds
+        res.writeHead(200, { ...corsHeaders, "Content-Type": "text/plain" });
+        res.end("ok");
 
         const code = url.searchParams.get("code");
         const retState = url.searchParams.get("state");

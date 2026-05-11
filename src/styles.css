@@ -6107,92 +6107,111 @@ input:checked + .mcp-toggle-slider:before {
   padding: 60px;
 }
 
-.account-signed-out {
+/* ── Signed-out state ── */
+
+.acct-signed-out {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   flex: 1;
   text-align: center;
-  padding: 48px 24px;
-  gap: 10px;
+  padding: 48px 28px;
+  gap: 6px;
+  position: relative;
 }
 
-.account-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: rgba(167,139,250,0.15);
-  border: 1px solid rgba(167,139,250,0.25);
-  color: #a78bfa;
-  font-size: 16px;
-  font-weight: 700;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
+.acct-signed-out-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -60%);
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(167,139,250,0.06) 0%, transparent 70%);
+  pointer-events: none;
 }
 
-.account-avatar-lg {
-  width: 56px;
-  height: 56px;
-  font-size: 22px;
-  margin-bottom: 4px;
-}
-
-.account-signed-out-title {
+.acct-signed-out-title {
   font-size: 15px;
   font-weight: 600;
   color: var(--text);
-  margin: 0;
+  margin: 10px 0 0;
 }
 
-.account-signed-out-sub {
+.acct-signed-out-sub {
   font-size: 12px;
   color: var(--muted);
   margin: 0;
-  max-width: 260px;
-  line-height: 1.5;
+  max-width: 240px;
+  line-height: 1.55;
 }
 
-.account-signin-btn {
-  margin-top: 8px;
-  padding: 9px 20px;
+.acct-signin-btn {
+  margin-top: 14px;
+  padding: 8px 28px;
   border-radius: 8px;
   background: var(--text);
   color: var(--bg);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   font-family: inherit;
   border: none;
   cursor: pointer;
   transition: opacity 150ms;
+  letter-spacing: 0.01em;
 }
 
-.account-signin-btn:hover { opacity: 0.88; }
+.acct-signin-btn:hover { opacity: 0.88; }
 
-.account-identity {
+/* ── Inner container ── */
+
+.acct-inner {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Identity card ── */
+
+.acct-identity-card {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 20px 20px 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 
-.account-identity-info {
+.account-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.acct-identity-info {
   flex: 1;
   min-width: 0;
 }
 
-.account-identity-name {
-  font-size: 14px;
+.acct-identity-name {
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  letter-spacing: -0.01em;
 }
 
-.account-identity-email {
+.acct-identity-email {
   font-size: 11px;
   color: var(--muted);
   overflow: hidden;
@@ -6204,136 +6223,198 @@ input:checked + .mcp-toggle-slider:before {
 .account-plan-badge {
   flex-shrink: 0;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: 6px;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  background: rgba(from var(--badge-color, #888) r g b / 0.12);
+  background: color-mix(in srgb, var(--badge-color, #888) 12%, transparent);
   color: var(--badge-color, #888);
-  border: 1px solid rgba(from var(--badge-color, #888) r g b / 0.25);
-  /* Fallback for browsers without relative color syntax */
-  background: color-mix(in srgb, var(--badge-color, #888) 15%, transparent);
-  border-color: color-mix(in srgb, var(--badge-color, #888) 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--badge-color, #888) 20%, transparent);
 }
 
-.account-section {
+/* ── Sections ── */
+
+.acct-section {
   padding: 16px 20px;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
 }
 
-.account-section-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 10px;
+.acct-section-last {
+  border-bottom: none;
+}
+
+.acct-section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 10px;
 }
 
-.account-card {
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 9px;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.acct-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
-.account-card-row {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  color: var(--text);
-}
+/* ── Subscription card ── */
 
-.account-muted { color: var(--muted) !important; font-size: 12px !important; }
-
-.account-billing-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 4px;
-  padding: 5px 10px;
-  border-radius: 6px;
-  background: transparent;
-  border: 1px solid rgba(255,255,255,0.1);
-  color: var(--muted-strong);
-  font-size: 11px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 130ms;
-  align-self: flex-start;
-}
-
-.account-billing-btn:hover {
-  background: rgba(255,255,255,0.06);
-  color: var(--text);
-  border-color: rgba(255,255,255,0.18);
-}
-
-.account-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-}
-
-.account-stat-card {
+.acct-sub-card {
   background: rgba(255,255,255,0.02);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
-.account-stat-label {
-  font-size: 10px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 600;
-  margin-bottom: 3px;
-}
-
-.account-stat-value {
-  font-size: 16px;
-  font-weight: 700;
+.acct-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
   color: var(--text);
-  font-variant-numeric: tabular-nums;
+  font-weight: 500;
 }
 
-.account-stat-sub {
-  font-size: 10px;
+.acct-sub-renew {
+  font-size: 11px;
   color: var(--muted);
+}
+
+.acct-billing-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 150ms;
+  align-self: flex-start;
+}
+
+.acct-billing-link:hover {
+  color: var(--text);
+}
+
+/* ── Usage bar chart ── */
+
+.acct-usage-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 40px;
+  margin-bottom: 12px;
+  padding: 0 2px;
+}
+
+.acct-usage-bar-col {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.acct-usage-bar {
+  width: 100%;
+  border-radius: 2px;
+  background: rgba(167,139,250,0.25);
+  transition: height 300ms ease;
+  min-height: 1px;
+}
+
+/* ── Metrics grid ── */
+
+.acct-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.acct-metric {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 7px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.04);
+  transition: background 150ms;
+}
+
+.acct-metric:hover {
+  background: rgba(255,255,255,0.035);
+}
+
+.acct-metric-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.04);
+  color: var(--muted);
+  flex-shrink: 0;
   margin-top: 1px;
 }
 
-.account-sparkline {
-  display: block;
+.acct-metric-body {
+  min-width: 0;
 }
 
-.account-signout-btn {
+.acct-metric-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.acct-metric-label {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.acct-metric-sub {
+  font-size: 9px;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+/* ── Sign out ── */
+
+.acct-signout-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 7px;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: 6px;
   background: transparent;
-  border: 1px solid rgba(211,74,74,0.2);
-  color: #ff8d8d;
-  font-size: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  color: var(--muted);
+  font-size: 11px;
   font-family: inherit;
   cursor: pointer;
-  transition: all 130ms;
+  transition: all 150ms;
 }
 
-.account-signout-btn:hover {
-  background: rgba(211,74,74,0.08);
-  border-color: rgba(211,74,74,0.35);
+.acct-signout-btn:hover {
+  background: rgba(211,74,74,0.06);
+  border-color: rgba(211,74,74,0.2);
+  color: #ff8d8d;
 }
 
 /* ── Clone dialog ──────────────────────────────────────────────────────── */
