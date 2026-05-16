@@ -12,6 +12,19 @@ const DEFAULTS = {
 
 function normalizeSettings(settings = {}) {
   const providerId = settings.providerId || DEFAULTS.providerId;
+  if (providerId === "plan") {
+    return {
+      providerId,
+      baseUrl: "",
+      apiKey: "",
+      model: settings.model || DEFAULTS.model,
+      modelId: settings.modelId || settings.model || DEFAULTS.model,
+      provider: settings.provider || "",
+      temperature: Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : DEFAULTS.temperature,
+      maxTokens: Number.isFinite(Number(settings.maxTokens)) ? Number(settings.maxTokens) : DEFAULTS.maxTokens,
+      accessToken: settings.accessToken || "",
+    };
+  }
   return {
     providerId,
     baseUrl: (settings.baseUrl || DEFAULTS.baseUrl).replace(/\/+$/, ""),
@@ -27,9 +40,60 @@ function normalizeSettings(settings = {}) {
 
 function createProvider(settings) {
   const config = normalizeSettings(settings);
+  if (config.providerId === "plan") return new PlanGatewayProvider(config);
   if (config.providerId === "anthropic") return new AnthropicProvider(config);
   if (config.providerId === "google") return new GoogleProvider(config);
   return new OpenAICompatibleProvider(config);
+}
+
+class PlanGatewayProvider {
+  constructor(config) {
+    this.config = config;
+  }
+
+  async call({ systemPrompt, messages, tools = TOOL_DEFINITIONS }) {
+    if (!this.config.accessToken) {
+      throw new Error("Sign in to use Codegrey plan models, or switch the composer to BYOK.");
+    }
+
+    const { url, anonKey } = getSupabaseFunctionConfig();
+    const response = await fetch(`${url}/functions/v1/model-gateway`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: anonKey,
+        Authorization: `Bearer ${this.config.accessToken}`,
+      },
+      body: JSON.stringify({
+        modelId: this.config.modelId,
+        provider: this.config.provider,
+        providerModel: this.config.model,
+        temperature: this.config.temperature,
+        maxTokens: this.config.maxTokens,
+        systemPrompt,
+        messages,
+        tools,
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Plan model gateway failed (${response.status}): ${text.slice(0, 500)}`);
+    }
+
+    const json = await response.json();
+    return {
+      content: Array.isArray(json.content) ? json.content : [{ type: "text", text: json.text || "" }],
+      stop_reason: json.stop_reason || "end_turn",
+    };
+  }
+
+  async stream({ systemPrompt, messages, onStream, tools = TOOL_DEFINITIONS }) {
+    const response = await this.call({ systemPrompt, messages, tools });
+    const text = response.content.filter((block) => block.type === "text").map((block) => block.text).join("\n");
+    if (text) onStream?.({ type: "text_delta", text });
+    return response;
+  }
 }
 
 class AnthropicProvider {
@@ -526,6 +590,20 @@ function stripProviderFields(block) {
   if (!block || typeof block !== "object") return block;
   const { index, ...clean } = block;
   return clean;
+}
+
+function getSupabaseFunctionConfig() {
+  const url = (
+    process.env.CODEGREY_SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    "https://fdizzpftrynhlaawsjpq.supabase.co"
+  ).replace(/\/+$/, "");
+  const anonKey =
+    process.env.CODEGREY_SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    "sb_publishable_i6MMYWQLq8nAup-pUj4iGw_ls3VcguL";
+  return { url, anonKey };
 }
 
 module.exports = { createProvider, normalizeSettings, DEFAULTS };

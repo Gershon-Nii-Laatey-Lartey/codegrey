@@ -5,7 +5,7 @@
 #define MyAppName "Codegrey"
 #define MyAppVersion "0.1.0"
 #define MyAppPublisher "Codegrey"
-#define MyAppURL "https://github.com/Gershon-Nii-Laatey-Lartey/codegrey"
+#define MyAppURL "https://codegrey.dev"
 #define MyAppExeName "Codegrey.exe"
 
 ; --- Paths ---

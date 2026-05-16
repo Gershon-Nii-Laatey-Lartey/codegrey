@@ -15,6 +15,7 @@ import {
   MessageSquare,
   FileText,
   ImageIcon,
+  Search,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Editor, { DiffEditor } from "@monaco-editor/react";
@@ -23,9 +24,25 @@ import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
 import { Browser } from "./Browser";
 import { MessageRenderer } from "../components/chat/MessageRenderer";
+import { ModelSelector } from "../features/chat/ModelSelector";
 import { getSessionId, initSession, streamChat } from "../lib/aiClient";
 import { readWorkspaceLayout, writeWorkspaceLayout } from "../lib/workspaceLayout";
-import { DEFAULT_AI_SETTINGS, type AiSettings, type ChatMessage, type ChatMessagePart } from "../types/ai";
+import {
+  DEFAULT_AI_REQUEST,
+  DEFAULT_AI_SETTINGS,
+  type AiMode,
+  type AiRequestConfig,
+  type AiSettings,
+  type ChatMessage,
+  type ChatMessagePart,
+  type ModelCatalogItem,
+} from "../types/ai";
+import {
+  fetchModelCatalog,
+  filterModelsForPlan,
+  loadModelSelection,
+  saveModelSelection,
+} from "../services/modelCatalog";
 import { createPatch } from "diff";
 
 type WorkspaceViewMode = "agent" | "split";
@@ -46,6 +63,7 @@ export function Workspace({
   setTerminalOpen,
   viewMode,
   browserTabRequest,
+  homeRequest,
   activeWorkspaceId,
   activeConversationId,
   activeConversationRequest,
@@ -53,6 +71,9 @@ export function Workspace({
   onCloseConversation,
   onClearSelectedFile,
   onOpenMcpSettings,
+  onOpenAccounts,
+  isLoggedIn,
+  userPlan,
 }: {
   workspaceRoot: string | null;
   selectedFile: string | null;
@@ -64,6 +85,7 @@ export function Workspace({
   setTerminalOpen: (open: boolean) => void;
   viewMode: WorkspaceViewMode;
   browserTabRequest?: number;
+  homeRequest?: number;
   activeWorkspaceId?: string | null;
   activeConversationId?: string | null;
   activeConversationRequest?: number;
@@ -71,6 +93,9 @@ export function Workspace({
   onCloseConversation?: () => void;
   onClearSelectedFile?: () => void;
   onOpenMcpSettings?: () => void;
+  onOpenAccounts?: () => void;
+  isLoggedIn?: boolean;
+  userPlan?: string | null;
 }) {
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -79,12 +104,20 @@ export function Workspace({
   const [value, setValue] = useState("");
   const [attachedImages, setAttachedImages] = useState<Array<{ name: string; dataUrl: string; base64: string; mimeType: string }>>([]);
   const [attachedContextFiles, setAttachedContextFiles] = useState<string[]>([]);
+  const [contextPickerOpen, setContextPickerOpen] = useState(false);
+  const [contextQuery, setContextQuery] = useState("");
+  const [contextResults, setContextResults] = useState<Array<{ filePath: string; line?: number; preview?: string }>>([]);
+  const [contextSearching, setContextSearching] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const contextPickerRef = useRef<HTMLDivElement | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatTabVisible, setChatTabVisible] = useState(false);
   const [continuePromptVisible, setContinuePromptVisible] = useState(false);
   const [aiSettings, setAiSettings] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
+  const [modelCatalog, setModelCatalog] = useState<ModelCatalogItem[]>([]);
+  const [aiMode, setAiMode] = useState<AiMode>(isLoggedIn ? "plan" : "byok");
+  const [planModelId, setPlanModelId] = useState(DEFAULT_AI_REQUEST.modelId);
   const [reviewProposalId, setReviewProposalId] = useState<string | null>(null);
   const [agentRunning, setAgentRunning] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -116,6 +149,48 @@ export function Workspace({
   const terminalSeqRef = useRef(0);
   const pendingFitRef = useRef<number | null>(null);
   const loadedConversationIdRef = useRef<string | null>(null);
+
+  const contextOpenTabs = useMemo(
+    () => openTabs.filter((tab) => tab !== CHAT_TAB_ID && tab !== BROWSER_TAB_ID),
+    [openTabs]
+  );
+  const contextActiveFile = activeTab && activeTab !== CHAT_TAB_ID && activeTab !== BROWSER_TAB_ID ? activeTab : null;
+  const availablePlanModels = useMemo(
+    () => filterModelsForPlan(modelCatalog, userPlan),
+    [modelCatalog, userPlan]
+  );
+  const activePlanModelId = useMemo(() => {
+    if (availablePlanModels.some((model) => model.id === planModelId)) return planModelId;
+    return availablePlanModels.find((model) => model.isDefault)?.id ?? availablePlanModels[0]?.id ?? DEFAULT_AI_REQUEST.modelId;
+  }, [availablePlanModels, planModelId]);
+  const aiRequest = useMemo<AiRequestConfig>(() => ({
+    mode: aiMode,
+    modelId: aiMode === "plan" ? activePlanModelId : "byok-local",
+    temperature: aiSettings.temperature,
+    maxTokens: aiSettings.maxTokens,
+    byok: aiSettings,
+  }), [activePlanModelId, aiMode, aiSettings]);
+  const contextSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const next: Array<{ filePath: string; source: "active" | "tab" | "search"; line?: number; preview?: string; isDir?: boolean }> = [];
+    const query = contextQuery.trim().toLowerCase();
+    const matchesQuery = (filePath: string) => !query || shortName(filePath).toLowerCase().includes(query);
+    if (contextActiveFile && matchesQuery(contextActiveFile)) {
+      seen.add(contextActiveFile);
+      next.push({ filePath: contextActiveFile, source: "active" });
+    }
+    contextOpenTabs.forEach((filePath) => {
+      if (seen.has(filePath) || !matchesQuery(filePath)) return;
+      seen.add(filePath);
+      next.push({ filePath, source: "tab" });
+    });
+    contextResults.forEach((result) => {
+      if (seen.has(result.filePath)) return;
+      seen.add(result.filePath);
+      next.push({ ...result, source: "search" });
+    });
+    return next;
+  }, [contextActiveFile, contextOpenTabs, contextQuery, contextResults, workspaceRoot]);
 
   useEffect(() => {
     if (!workspaceRoot) return;
@@ -219,6 +294,58 @@ export function Workspace({
   }, [browserTabRequest]);
 
   useEffect(() => {
+    if (!contextPickerOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!contextPickerRef.current?.contains(event.target as Node)) {
+        setContextPickerOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    return () => window.removeEventListener("mousedown", onPointerDown);
+  }, [contextPickerOpen]);
+
+  useEffect(() => {
+    if (!contextPickerOpen || !workspaceRoot || !contextQuery.trim()) {
+      setContextResults([]);
+      setContextSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setContextSearching(true);
+    const timer = window.setTimeout(() => {
+      void window.codegrey?.workspace?.search?.(contextQuery.trim(), { maxResults: 40, mode: "filename" }).then((results) => {
+        if (cancelled) return;
+        const byFile = new Map<string, { filePath: string; isDir?: boolean }>();
+        (results ?? []).forEach((result) => {
+          if (!byFile.has(result.filePath)) {
+            byFile.set(result.filePath, {
+              filePath: result.filePath,
+              isDir: result.isDir
+            });
+          }
+        });
+        setContextResults([...byFile.values()]);
+        setContextSearching(false);
+      });
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [contextPickerOpen, contextQuery, workspaceRoot]);
+
+  useEffect(() => {
+    if (!homeRequest) return;
+    setActiveTab(null);
+    setChatTabVisible(false);
+    setContinuePromptVisible(false);
+    setReviewProposalId(null);
+    setOpenTabs((prev) => prev.filter((tab) => tab !== CHAT_TAB_ID && tab !== BROWSER_TAB_ID));
+  }, [homeRequest]);
+
+  useEffect(() => {
     let cancelled = false;
     void window.codegrey?.settings?.get().then((settings) => {
       if (!cancelled && settings) setAiSettings({ ...DEFAULT_AI_SETTINGS, ...settings });
@@ -227,6 +354,34 @@ export function Workspace({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const stored = loadModelSelection();
+    // Use plan models if logged in AND (either the user chose it or the global setting prefers it)
+    const shouldDefaultToPlan = isLoggedIn && (aiSettings.preferPlanModels || stored.mode === "plan");
+    setAiMode(shouldDefaultToPlan ? "plan" : "byok");
+    setPlanModelId(stored.planModelId);
+  }, [isLoggedIn, aiSettings.preferPlanModels]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const tokens = await window.codegrey?.auth?.loadTokens?.();
+      const models = await fetchModelCatalog(tokens?.access_token);
+      if (!cancelled) setModelCatalog(models);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    saveModelSelection({
+      mode: aiMode,
+      planModelId: activePlanModelId,
+      byokModelId: "byok-local",
+    });
+  }, [activePlanModelId, aiMode]);
 
   useEffect(() => {
     if (!workspaceRoot) return;
@@ -429,12 +584,10 @@ export function Workspace({
     e.target.value = "";
   };
 
-  const handleAttachContext = async () => {
-    if (!workspaceRoot) return;
-    const result = await window.codegrey?.workspace?.openFile?.();
-    if (result?.filePath) {
-      setAttachedContextFiles((prev) => prev.includes(result.filePath) ? prev : [...prev, result.filePath]);
-    }
+  const addContextFile = (filePath: string) => {
+    setAttachedContextFiles((prev) => prev.includes(filePath) ? prev : [...prev, filePath]);
+    setContextPickerOpen(false);
+    setContextQuery("");
   };
 
   const removeImage = (idx: number) => setAttachedImages((prev) => prev.filter((_, i) => i !== idx));
@@ -525,6 +678,7 @@ export function Workspace({
         images: attachedImages.map((img) => ({ base64: img.base64, mimeType: img.mimeType })),
         workspaceRoot,
         aiSettings,
+        aiRequest,
         agentMode: aiSettings.autoApply ? "auto" : "propose",
         signal: abortController.signal,
         editorContext: {
@@ -624,10 +778,13 @@ export function Workspace({
 
       if (isFirstMessage && activeWorkspaceId && targetConvId) {
         try {
+          const tokens = await window.codegrey?.auth?.loadTokens?.();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (tokens?.access_token) headers.Authorization = `Bearer ${tokens.access_token}`;
           const res = await fetch("http://localhost:3172/api/agent/title", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: text, aiSettings }),
+            headers,
+            body: JSON.stringify({ message: text, aiSettings, aiRequest }),
           });
           const data = await res.json();
           if (data.title) {
@@ -1117,19 +1274,33 @@ export function Workspace({
               {attachedImages.map((img, i) => (
                 <div key={i} className="attach-preview-chip attach-preview-image">
                   <img src={img.dataUrl} alt={img.name} className="attach-thumb" />
-                  <span className="attach-chip-name">{img.name}</span>
                   <button type="button" className="attach-chip-remove" onClick={() => removeImage(i)}><X size={10} /></button>
                 </div>
               ))}
-              {attachedContextFiles.map((p) => (
-                <div key={p} className="attach-preview-chip attach-preview-file">
-                  <FileText size={11} />
-                  <span className="attach-chip-name">{p.split(/[\/]/).pop()}</span>
-                  <button type="button" className="attach-chip-remove" onClick={() => removeContext(p)}><X size={10} /></button>
-                </div>
-              ))}
+              {attachedContextFiles.map((p) => {
+                const name = shortName(p);
+                const icon = getFileIcon(name);
+                return (
+                  <div key={p} className="attach-preview-chip attach-preview-file">
+                    <div className="attach-chip-icon">
+                      {icon.svg ? (
+                        <img src={icon.svg} alt="" />
+                      ) : (
+                        <span className="seti-icon" style={{ color: icon.color }}>
+                          {icon.char}
+                        </span>
+                      )}
+                    </div>
+                    <span className="attach-chip-name">{name}</span>
+                    <button type="button" className="attach-chip-remove" onClick={() => removeContext(p)} aria-label={`Remove ${name}`}>
+                      <X size={10} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
+          <div className="chat-input-main">
           <div className="chat-input-top">
             <textarea
               ref={taRef}
@@ -1152,12 +1323,130 @@ export function Workspace({
               <button className="icon-btn" data-tooltip="Attach Image" type="button" onClick={handleAttachImage}>
                 <Paperclip size={s} />
               </button>
-              <button className="icon-btn" data-tooltip="Attach Context File" type="button" onClick={() => void handleAttachContext()}>
-                <AtSign size={s} />
-              </button>
-              <button className="icon-btn" data-tooltip="Terminal Context" type="button">
-                <Monitor size={s} />
-              </button>
+              <div className="context-attach-control" ref={contextPickerRef}>
+                <button
+                  className="icon-btn"
+                  data-tooltip="Attach Context"
+                  type="button"
+                  onClick={() => setContextPickerOpen((open) => !open)}
+                  disabled={!workspaceRoot}
+                >
+                  <AtSign size={s} />
+                </button>
+                {contextPickerOpen ? (
+                  <div className="context-picker" role="dialog" aria-label="Attach context">
+                    <div className="context-picker-search">
+                      <Search size={14} />
+                      <input
+                        autoFocus
+                        value={contextQuery}
+                        placeholder="Search files..."
+                        onChange={(event) => setContextQuery(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") setContextPickerOpen(false);
+                        }}
+                      />
+                    </div>
+                    <div className="context-picker-list">
+                      {!contextQuery.trim() && contextActiveFile ? (
+                        <div className="context-picker-group-label">Active file</div>
+                      ) : null}
+                      {!contextQuery.trim() && contextActiveFile ? (
+                        <button
+                          type="button"
+                          className="context-picker-item"
+                          onClick={() => addContextFile(contextActiveFile)}
+                          disabled={attachedContextFiles.includes(contextActiveFile)}
+                        >
+                          <div className="context-picker-item-icon">
+                            {getFileIcon(shortName(contextActiveFile)).svg ? (
+                              <img src={getFileIcon(shortName(contextActiveFile)).svg} alt="" />
+                            ) : (
+                              <span className="seti-icon" style={{ color: getFileIcon(shortName(contextActiveFile)).color }}>
+                                {getFileIcon(shortName(contextActiveFile)).char}
+                              </span>
+                            )}
+                          </div>
+                          <div className="context-picker-item-content">
+                            <strong>{shortName(contextActiveFile)}</strong>
+                            <small>{relativeToWorkspace(workspaceRoot, contextActiveFile)}</small>
+                          </div>
+                        </button>
+                      ) : null}
+
+                      {!contextQuery.trim() && contextOpenTabs.length > 0 ? (
+                        <div className="context-picker-group-label">Open tabs</div>
+                      ) : null}
+                      {!contextQuery.trim() ? contextOpenTabs
+                        .filter((filePath) => filePath !== contextActiveFile)
+                        .map((filePath) => (
+                          <button
+                            type="button"
+                            key={filePath}
+                            className="context-picker-item"
+                            onClick={() => addContextFile(filePath)}
+                            disabled={attachedContextFiles.includes(filePath)}
+                          >
+                            <div className="context-picker-item-icon">
+                              {getFileIcon(shortName(filePath)).svg ? (
+                                <img src={getFileIcon(shortName(filePath)).svg} alt="" />
+                              ) : (
+                                <span className="seti-icon" style={{ color: getFileIcon(shortName(filePath)).color }}>
+                                  {getFileIcon(shortName(filePath)).char}
+                                </span>
+                              )}
+                            </div>
+                            <div className="context-picker-item-content">
+                              <strong>{shortName(filePath)}</strong>
+                              <small>{relativeToWorkspace(workspaceRoot, filePath)}</small>
+                            </div>
+                          </button>
+                        )) : null}
+
+                      {contextQuery.trim() ? (
+                        <div className="context-picker-group-label">{contextSearching ? "Searching..." : "Search results"}</div>
+                      ) : null}
+                      {contextQuery.trim() && !contextSearching && contextSuggestions.length === 0 ? (
+                        <div className="context-picker-empty">No matching files</div>
+                      ) : null}
+                      {contextQuery.trim() ? contextSuggestions.map((item) => (
+                        <button
+                          type="button"
+                          key={item.filePath}
+                          className="context-picker-item"
+                          onClick={() => addContextFile(item.filePath)}
+                          disabled={attachedContextFiles.includes(item.filePath)}
+                        >
+                          <div className="context-picker-item-icon">
+                            {getFileIcon(shortName(item.filePath), item.isDir).svg ? (
+                              <img src={getFileIcon(shortName(item.filePath), item.isDir).svg} alt="" />
+                            ) : (
+                              <span className="seti-icon" style={{ color: getFileIcon(shortName(item.filePath), item.isDir).color }}>
+                                {getFileIcon(shortName(item.filePath), item.isDir).char}
+                              </span>
+                            )}
+                          </div>
+                          <div className="context-picker-item-content">
+                            <strong>{shortName(item.filePath)}</strong>
+                            <small>{relativeToWorkspace(workspaceRoot, item.filePath)}</small>
+                          </div>
+                        </button>
+                      )) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <ModelSelector
+                mode={aiMode}
+                planModelId={activePlanModelId}
+                byokLabel={`${aiSettings.providerId} / ${aiSettings.model || "model"}`}
+                models={availablePlanModels}
+                disabled={agentRunning}
+                onModeChange={setAiMode}
+                onPlanModelChange={setPlanModelId}
+                onOpenSettings={onOpenAccounts}
+              />
             </div>
             <div className="action-group">
               <button className="icon-btn" data-tooltip="Voice Input" type="button">
@@ -1174,6 +1463,7 @@ export function Workspace({
                 {agentRunning ? <Square size={Math.max(10, s - 4)} fill="currentColor" /> : <ArrowUp size={s} />}
               </button>
             </div>
+          </div>
           </div>
         </div>
 
@@ -1330,7 +1620,7 @@ export function Workspace({
       <div
         ref={workspaceBodyRef}
         className="ide-workspace-body"
-        style={viewMode === "split" ? { gridTemplateColumns: `minmax(0, 1fr) ${chatPanelWidth}px` } : undefined}
+        style={viewMode === "split" ? { gridTemplateColumns: `minmax(200px, 1fr) minmax(280px, ${chatPanelWidth}px)` } : undefined}
       >
         <div className="ide-editor">
           <div className="editor-tabs">
@@ -1467,9 +1757,7 @@ export function Workspace({
             </div>
             <div className="terminal-body">
               <div className="terminal-surface">
-                <div ref={terminalViewportRef} className="terminal-xterm" />
                 <div className="terminal-list" aria-label="Terminal instances">
-                  <div className="terminal-list-header">Terminals</div>
                   {terminals.map((t) => (
                     <div
                       key={t.id}
@@ -1499,6 +1787,7 @@ export function Workspace({
                     </div>
                   ))}
                 </div>
+                <div ref={terminalViewportRef} className="terminal-xterm" />
               </div>
             </div>
           </div>
@@ -1529,6 +1818,11 @@ export function Workspace({
 function shortName(filePath: string) {
   const parts = filePath.split(/[/\\]/);
   return parts[parts.length - 1] || filePath;
+}
+
+function relativeToWorkspace(root: string | null, filePath: string) {
+  if (!root) return filePath;
+  return filePath.replace(root, "").replace(/^[/\\]/, "") || shortName(filePath);
 }
 
 function inferLanguage(filePath: string) {

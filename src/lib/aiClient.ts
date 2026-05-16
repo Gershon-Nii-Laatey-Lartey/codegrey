@@ -1,4 +1,4 @@
-import type { AiSettings, AiStreamEvent } from "../types/ai";
+import type { AiRequestConfig, AiSettings, AiStreamEvent } from "../types/ai";
 
 const API_BASE = "http://localhost:3172/api";
 
@@ -38,15 +38,20 @@ export async function streamChat(opts: {
   images?: Array<{ base64: string; mimeType: string }>;
   workspaceRoot: string;
   workspaceId?: string | null;
-  aiSettings: AiSettings;
+  aiSettings?: AiSettings;
+  aiRequest?: AiRequestConfig;
   agentMode: "propose" | "auto";
   editorContext?: { openFile?: string; cursorLine?: number; selection?: string; visibleFiles?: string[] };
   signal?: AbortSignal;
   onEvent: (event: AiStreamEvent) => void;
 }): Promise<void> {
+  const tokens = await window.codegrey?.auth?.loadTokens?.();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (tokens?.access_token) headers.Authorization = `Bearer ${tokens.access_token}`;
+
   const response = await fetch(`${API_BASE}/agent/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({
       sessionId: opts.sessionId,
       message: opts.message,
@@ -55,6 +60,7 @@ export async function streamChat(opts: {
       workspaceId: opts.workspaceId ?? null,
       editorContext: opts.editorContext,
       aiSettings: opts.aiSettings,
+      aiRequest: opts.aiRequest,
       agentMode: opts.agentMode,
     }),
     signal: opts.signal,
@@ -62,7 +68,7 @@ export async function streamChat(opts: {
 
   if (!response.ok || !response.body) {
     const message = await response.text();
-    throw new Error(message || `AI backend failed with HTTP ${response.status}`);
+    throw new Error(parseErrorMessage(message) || `AI backend failed with HTTP ${response.status}`);
   }
 
   const reader = response.body.getReader();
@@ -85,5 +91,15 @@ export async function streamChat(opts: {
       if (!payload) continue;
       opts.onEvent(JSON.parse(payload) as AiStreamEvent);
     }
+  }
+}
+
+function parseErrorMessage(body: string) {
+  if (!body) return "";
+  try {
+    const parsed = JSON.parse(body);
+    return parsed.error || parsed.message || body;
+  } catch {
+    return body;
   }
 }

@@ -3,7 +3,7 @@ import { useDesktopAuth } from "../lib/desktopAuth";
 import { CodegreyLogo } from "../components/CodegreyLogo";
 import { Loader } from "lucide-react";
 
-export function AuthGate({ onSkip }: { onSkip: () => void }) {
+export function AuthGate({ onSkip, showSkip = false }: { onSkip: () => void; showSkip?: boolean }) {
   const { signIn } = useDesktopAuth();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -50,14 +50,16 @@ export function AuthGate({ onSkip }: { onSkip: () => void }) {
             )}
           </button>
 
-          <button
-            type="button"
-            className="auth-gate-btn-ghost"
-            onClick={onSkip}
-            disabled={busy}
-          >
-            Continue without signing in
-          </button>
+          {showSkip && (
+            <button
+              type="button"
+              className="auth-gate-btn-ghost"
+              onClick={onSkip}
+              disabled={busy}
+            >
+              Continue without signing in
+            </button>
+          )}
         </div>
 
         <p className="auth-gate-note">

@@ -1,7 +1,7 @@
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
-type SearchResult = { filePath: string; line: number; preview: string };
+type SearchResult = { filePath: string; line?: number; preview?: string };
 
 export function SearchPanel({
   workspaceRoot,
@@ -80,7 +80,7 @@ export function SearchPanel({
             data-tooltip={result.filePath}
           >
             <strong>{relativeName(workspaceRoot, result.filePath)}</strong>
-            <span>{result.line}: {result.preview}</span>
+            <span>{result.line ? `${result.line}: ` : ""}{result.preview ?? ""}</span>
           </button>
         ))}
         {query && !searching && results.length === 0 ? <div className="sidebar-empty-note">No results</div> : null}

@@ -8,6 +8,37 @@ export type AiSettings = {
   temperature: number;
   maxTokens: number;
   autoApply: boolean;
+  preferPlanModels: boolean;
+};
+
+export type AiMode = "plan" | "byok";
+
+export type PlanTier = "free" | "pro" | "team" | "enterprise";
+
+export type ModelCapability = "chat" | "tools" | "vision" | "fast" | "reasoning";
+
+export type ModelCatalogItem = {
+  id: string;
+  displayName: string;
+  provider: string;
+  providerModel: string;
+  mode: "plan" | "byok";
+  description?: string;
+  capabilities: ModelCapability[];
+  planTiers: PlanTier[];
+  contextWindow?: number;
+  maxOutputTokens?: number;
+  enabled: boolean;
+  isDefault?: boolean;
+  sortOrder: number;
+};
+
+export type AiRequestConfig = {
+  mode: AiMode;
+  modelId: string;
+  temperature: number;
+  maxTokens: number;
+  byok?: AiSettings;
 };
 
 export type ToolStatus = "pending" | "running" | "done" | "error";
@@ -58,7 +89,13 @@ export type AiStreamEvent =
       toolId?: string;
       iteration?: number;
     }
-  | { type: "done"; finalMessage: string; iterations: number; toolsUsed: string[] }
+  | {
+      type: "done";
+      finalMessage: string;
+      iterations: number;
+      toolsUsed: string[];
+      usage?: { tokensIn: number; tokensOut: number; lines: number; model: string | null; keySource?: AiMode };
+    }
   | { type: "error"; message: string };
 
 export const PROVIDER_PRESETS: Record<
@@ -105,4 +142,15 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
   temperature: 0.5,
   maxTokens: 8096,
   autoApply: false,
+  preferPlanModels: true,
+};
+
+export const DEFAULT_PLAN_MODEL_ID = "codegrey-claude-sonnet";
+
+export const DEFAULT_AI_REQUEST: AiRequestConfig = {
+  mode: "plan",
+  modelId: DEFAULT_PLAN_MODEL_ID,
+  temperature: DEFAULT_AI_SETTINGS.temperature,
+  maxTokens: DEFAULT_AI_SETTINGS.maxTokens,
+  byok: DEFAULT_AI_SETTINGS,
 };

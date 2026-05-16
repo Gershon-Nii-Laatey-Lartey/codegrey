@@ -26,7 +26,7 @@ interface Window {
       createEntry?: (parentDir: string, name: string, isDir: boolean) => Promise<{ ok: boolean; path?: string; error?: string }>;
       renameEntry?: (entryPath: string, newName: string) => Promise<{ ok: boolean; path?: string; error?: string }>;
       deleteEntry?: (entryPath: string) => Promise<{ ok: boolean; error?: string }>;
-      search?: (query: string, opts?: { include?: string; maxResults?: number }) => Promise<Array<{ filePath: string; line: number; preview: string }>>;
+      search?: (query: string, opts?: { include?: string; maxResults?: number; mode?: "filename" | "content" }) => Promise<Array<{ filePath: string; line?: number; preview?: string; isDir?: boolean }>>;
       cloneRepo?: (repoUrl: string, parentDir?: string | null) => Promise<{ ok: boolean; path?: string; error?: string }>;
       onCloneProgress?: (handler: (msg: { line: string }) => void) => (() => void);
     };

@@ -67,7 +67,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
       <header className="settings-header">
         <div>
           <h1>Settings</h1>
-          <p>Local AI connection and edit behavior.</p>
+          <p>Plan models are the default. BYOK remains available for power users.</p>
         </div>
         <button className="settings-close-btn" type="button" onClick={onBack} aria-label="Close settings">
           <X size={16} />
@@ -77,7 +77,29 @@ export function Settings({ onBack }: { onBack: () => void }) {
       <div className="settings-content">
         <section className="settings-section">
           <div className="settings-section-title">
-            <h2>AI Provider</h2>
+            <h2>Plan Models</h2>
+            <span>Default for signed-in users</span>
+          </div>
+          <button
+            className="settings-toggle-row"
+            type="button"
+            data-enabled={settings.preferPlanModels}
+            onClick={() => void persist({ preferPlanModels: !settings.preferPlanModels })}
+          >
+            <span className="settings-toggle-dot" />
+            <span>
+              <strong>Use Codegrey plan models by default</strong>
+              <small>
+                The composer model picker uses admin-enabled shared models first. Switch to BYOK from the composer when
+                you want to use a local API key.
+              </small>
+            </span>
+          </button>
+        </section>
+
+        <section className="settings-section" data-disabled={settings.preferPlanModels}>
+          <div className="settings-section-title">
+            <h2>BYOK Provider</h2>
             <span>{saving ? "Saving..." : "Saved locally"}</span>
           </div>
           <div className="settings-provider-grid" role="radiogroup" aria-label="AI provider">
@@ -107,7 +129,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
           </div>
         </section>
 
-        <section className="settings-section">
+        <section className="settings-section" data-disabled={settings.preferPlanModels}>
           <div className="settings-section-title">
             <h2>API Key</h2>
           </div>
@@ -143,7 +165,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
           {testState === "ok" ? <p className="settings-ok">Connection succeeded.</p> : null}
         </section>
 
-        <section className="settings-section">
+        <section className="settings-section" data-disabled={settings.preferPlanModels}>
           <div className="settings-section-title">
             <h2>Model</h2>
           </div>

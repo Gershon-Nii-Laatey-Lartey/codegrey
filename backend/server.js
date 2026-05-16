@@ -11,6 +11,7 @@ const morgan = require("morgan");
 
 const agentRoutes = require("./src/routes/agent");
 const knowledgeRoutes = require("./src/routes/knowledge");
+const modelRoutes = require("./src/routes/models");
 
 const app = express();
 const PORT = process.env.PORT || 3172;
@@ -28,6 +29,7 @@ app.use(morgan("dev"));
 
 app.use("/api", agentRoutes);
 app.use("/api", knowledgeRoutes);
+app.use("/api", modelRoutes);
 
 app.use((err, req, res, next) => {
   console.error("[Server Error]", err);

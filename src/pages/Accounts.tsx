@@ -1,70 +1,37 @@
-import {
-  ArrowLeft,
-  CreditCard,
-  ExternalLink,
-  Loader,
-  LogOut,
-  RefreshCw,
-  Zap,
-  Activity,
-  Cpu,
-  BarChart3,
-  ArrowUpRight,
-} from "lucide-react";
-import { CodegreyLogo } from "../components/CodegreyLogo";
 import { useEffect } from "react";
-import { useDesktopAuth, BILLING_URL } from "../lib/desktopAuth";
-
-const PLAN_LABELS: Record<string, { label: string; color: string }> = {
-  free: { label: "Free", color: "#737373" },
-  pro: { label: "Pro", color: "#a78bfa" },
-  team: { label: "Team", color: "#38bdf8" },
-  enterprise: { label: "Enterprise", color: "#fb923c" },
-};
+import { BILLING_URL, useDesktopAuth } from "../lib/desktopAuth";
+import { AuthGate } from "./AuthGate";
 
 function PlanBadge({ plan }: { plan: string }) {
-  const { label, color } = PLAN_LABELS[plan] ?? PLAN_LABELS.free;
-  return (
-    <span
-      className="account-plan-badge"
-      style={{ "--badge-color": color } as React.CSSProperties}
-    >
-      {label}
-    </span>
-  );
-}
+  const labels: Record<string, string> = {
+    free: "Free",
+    pro: "Pro",
+    team: "Team",
+    enterprise: "Enterprise",
+  };
 
-function Avatar({ name, email }: { name: string | null; email: string | null }) {
-  const letter = (name || email || "?").charAt(0).toUpperCase();
-  return <div className="account-avatar">{letter}</div>;
-}
-
-function MetricTile({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
   return (
-    <div className="acct-metric">
-      <div className="acct-metric-icon">{icon}</div>
-      <div className="acct-metric-body">
-        <div className="acct-metric-value">{value}</div>
-        <div className="acct-metric-label">{label}</div>
-        {sub && <div className="acct-metric-sub">{sub}</div>}
-      </div>
+    <div className="acct-m-badge" data-plan={plan}>
+      <span className="acct-m-badge-label">{labels[plan] ?? labels.free}</span>
     </div>
   );
 }
 
-function UsageBar({ data }: { data: number[] }) {
-  if (!data.length) return null;
-  const max = Math.max(...data, 1);
+function Avatar({ name, email, url }: { name: string | null; email: string | null; url?: string | null }) {
+  const letter = (name || email || "?").charAt(0).toUpperCase();
   return (
-    <div className="acct-usage-bars">
-      {data.map((v, i) => (
-        <div key={i} className="acct-usage-bar-col">
-          <div
-            className="acct-usage-bar"
-            style={{ height: `${Math.max((v / max) * 100, 2)}%` }}
-          />
-        </div>
-      ))}
+    <div className="acct-m-avatar">
+      {url ? <img src={url} alt={name || "User"} className="acct-m-avatar-img" /> : letter}
+    </div>
+  );
+}
+
+function MetricTile({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="acct-m-tile">
+      <div className="acct-m-tile-label">{label}</div>
+      <div className="acct-m-tile-value">{value}</div>
+      <div className="acct-m-tile-detail">{detail}</div>
     </div>
   );
 }
@@ -72,136 +39,162 @@ function UsageBar({ data }: { data: number[] }) {
 export function Accounts({ onBack }: { onBack: () => void }) {
   const { auth, accountData, accountLoading, signIn, signOut, refreshAccount } = useDesktopAuth();
 
-  useEffect(() => { if (auth.loggedIn) void refreshAccount(); }, [auth.loggedIn]);
+  useEffect(() => {
+    if (auth.loggedIn) void refreshAccount();
+  }, [auth.loggedIn, refreshAccount]);
 
   const profile = accountData?.profile ?? auth.user;
   const sub = accountData?.subscription;
   const usage = accountData?.usage ?? [];
 
-  const totalCostCents = usage.reduce((s, e) => s + (e.cost_cents ?? 0), 0);
-  const totalTokensIn = usage.reduce((s, e) => s + (e.tokens_in ?? 0), 0);
-  const totalTokensOut = usage.reduce((s, e) => s + (e.tokens_out ?? 0), 0);
-  const totalRuns = usage.filter(e => e.event_type === "agent_run").length;
+  const totalTokensIn = usage.reduce((sum, event) => sum + (event.tokens_in ?? 0), 0);
+  const totalTokensOut = usage.reduce((sum, event) => sum + (event.tokens_out ?? 0), 0);
+  const totalRequests = usage.filter((event) => event.event_type === "request").length;
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const requestsThisMonth = usage.filter((event) => event.event_type === "request" && new Date(event.created_at) >= monthStart).length;
+  const totalLines = usage.reduce((sum, event) => sum + (event.lines ?? 0), 0);
 
-  const barData = (() => {
-    const days: Record<string, number> = {};
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i);
-      days[d.toISOString().slice(0, 10)] = 0;
-    }
-    usage.forEach(e => { const day = e.created_at.slice(0, 10); if (day in days) days[day]++; });
-    return Object.values(days);
-  })();
+  const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+  const fmtNum = (value: number) =>
+    value >= 1_000_000 ? `${(value / 1_000_000).toFixed(1)}M` : value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value);
 
-  const fmt = (c: number) => `$${(c / 100).toFixed(2)}`;
-  const fmtNum = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-  const renew = sub?.current_period_end
-    ? new Date(sub.current_period_end).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+  const renewDate = sub?.current_period_end
+    ? new Date(sub.current_period_end).toLocaleDateString(undefined, { month: "short", day: "numeric" })
     : null;
+  const latestActivity = usage[0]?.created_at
+    ? new Date(usage[0].created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    : "No recent usage";
+
+  const planName = sub?.plan ?? profile?.plan ?? "free";
+  const planLabel = planName.charAt(0).toUpperCase() + planName.slice(1);
+  const subscriptionStatus = sub?.status ? sub.status.replace(/_/g, " ") : "Active";
+  const monthlyRequestLimit = planName === "free" ? 100 : null;
+  const creditsRemaining = monthlyRequestLimit === null ? "Unlimited" : fmtNum(Math.max(monthlyRequestLimit - requestsThisMonth, 0));
+  const creditDetail = monthlyRequestLimit === null
+    ? "No monthly request cap"
+    : `${fmtNum(requestsThisMonth)} / ${fmtNum(monthlyRequestLimit)} requests used`;
+
   const topModel = (() => {
     const counts: Record<string, number> = {};
-    usage.forEach(e => { if (e.model) counts[e.model] = (counts[e.model] ?? 0) + 1; });
+    usage.forEach((event) => {
+      if (event.model) counts[event.model] = (counts[event.model] ?? 0) + 1;
+    });
     const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-    if (!top) return "—";
-    const m = top[0];
-    return m.length > 18 ? m.slice(m.lastIndexOf("/") + 1) : m;
+    if (!top) return "None yet";
+    const model = top[0].split("/").pop() ?? top[0];
+    return model.length > 22 ? `${model.slice(0, 22)}...` : model;
   })();
 
   const openBilling = () => {
-    (window as any).codegrey?.windowControls?.openExternal?.(BILLING_URL)
-      ?? window.open(BILLING_URL, "_blank");
+    (window as any).codegrey?.windowControls?.openExternal?.(BILLING_URL) ?? window.open(BILLING_URL, "_blank");
   };
 
   return (
-    <section className="settings-page account-page" aria-label="Account">
+    <section className="settings-page acct-m-page" aria-label="Account">
       <header className="settings-header">
         <div>
           <h1>Account</h1>
-          <p>{auth.loggedIn ? (profile?.email ?? "Signed in") : "Not signed in"}</p>
+          <p>Profile, plan, and local usage.</p>
         </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          {auth.loggedIn && (
-            <button type="button" className="icon-btn" title="Refresh" onClick={() => void refreshAccount()} disabled={accountLoading}>
-              <RefreshCw size={14} className={accountLoading ? "spin" : ""} />
+        <div className="acct-m-header-actions">
+          {auth.loggedIn ? (
+            <button
+              type="button"
+              className="acct-m-action-btn"
+              onClick={() => void refreshAccount()}
+              disabled={accountLoading}
+              aria-label="Refresh account"
+              data-tooltip="Refresh account"
+            >
+              Refresh
             </button>
-          )}
-          <button className="settings-close-btn" type="button" onClick={onBack}><ArrowLeft size={16} /></button>
+          ) : null}
+          <button className="settings-close-btn" type="button" onClick={onBack} aria-label="Back">
+            Back
+          </button>
         </div>
       </header>
 
-      <div className="settings-content account-content">
+      <div className="settings-content">
         {!auth.loggedIn ? (
-          /* ── Signed-out state ──────────────────────────────────────── */
-          <div className="acct-signed-out">
-            <div className="acct-signed-out-glow" />
-            <CodegreyLogo size={48} />
-            <p className="acct-signed-out-title">Sign in to Codegrey</p>
-            <p className="acct-signed-out-sub">
-              Access your plan, sync usage across devices, and manage billing.
-            </p>
-            <button type="button" className="acct-signin-btn" onClick={() => void signIn()}>
-              Sign in
-            </button>
-          </div>
+          <AuthGate onSkip={onBack} />
         ) : accountLoading && !accountData ? (
-          <div className="account-loading"><Loader size={18} className="spin" /></div>
+          <div className="acct-m-loading">
+            <span>Syncing profile...</span>
+          </div>
         ) : (
-          /* ── Signed-in state ──────────────────────────────────────── */
-          <div className="acct-inner">
-            {/* Identity card */}
-            <div className="acct-identity-card">
-              <Avatar name={profile?.full_name ?? null} email={profile?.email ?? null} />
-              <div className="acct-identity-info">
-                <div className="acct-identity-name">{profile?.full_name || profile?.email || "—"}</div>
-                <div className="acct-identity-email">{profile?.email}</div>
-              </div>
-              <PlanBadge plan={profile?.plan ?? "free"} />
-            </div>
-
-            {/* Subscription */}
-            <div className="acct-section">
-              <div className="acct-section-head">
-                <span className="acct-section-label">Subscription</span>
-              </div>
-              <div className="acct-sub-card">
-                <div className="acct-sub-row">
-                  <CreditCard size={13} strokeWidth={1.8} />
-                  <span>{sub ? `${sub.plan.charAt(0).toUpperCase() + sub.plan.slice(1)} — ${fmt(sub.monthly_price_cents)}/mo` : "Free plan"}</span>
-                </div>
-                {renew && (
-                  <div className="acct-sub-renew">
-                    {sub?.cancel_at_period_end ? "Cancels" : "Renews"} {renew}
+          <div className="acct-m-container">
+            <section className="acct-m-hero">
+              <div className="acct-m-profile">
+                <Avatar name={profile?.full_name ?? null} email={profile?.email ?? null} url={profile?.avatar_url} />
+                <div className="acct-m-info">
+                  <div className="acct-m-name">
+                    {profile?.full_name || profile?.email?.split("@")[0] || "User"}
+                    <PlanBadge plan={profile?.plan ?? "free"} />
                   </div>
-                )}
-                <button type="button" className="acct-billing-link" onClick={openBilling}>
-                  Manage billing <ArrowUpRight size={10} strokeWidth={2.5} />
+                  <div className="acct-m-email">{profile?.email}</div>
+                </div>
+              </div>
+
+              <div className="acct-m-plan-panel">
+                <div>
+                  <div className="acct-m-plan-kicker">
+                    <span>{subscriptionStatus}</span>
+                  </div>
+                  <div className="acct-m-plan-title">{planLabel} edition</div>
+                  <div className="acct-m-plan-sub">
+                    {sub ? `${fmt(sub.monthly_price_cents)}/mo` : "$0.00/mo"}
+                    {renewDate ? ` - ${sub?.cancel_at_period_end ? "ends" : "renews"} ${renewDate}` : ""}
+                  </div>
+                </div>
+                <button type="button" className="acct-m-card-btn" onClick={openBilling}>
+                  Manage billing
                 </button>
               </div>
-            </div>
+            </section>
 
-            {/* Usage */}
-            <div className="acct-section">
-              <div className="acct-section-head">
-                <span className="acct-section-label">Usage — 14 days</span>
+            <section className="acct-m-section">
+              <div className="acct-m-section-title">
+                <div>
+                  <div className="acct-m-label">Usage</div>
+                  <p>Recent account activity from synced runs.</p>
+                </div>
+                <div className="acct-m-last-sync">
+                  <span>{latestActivity}</span>
+                </div>
               </div>
-
-              <UsageBar data={barData} />
-
-              <div className="acct-metrics-grid">
-                <MetricTile icon={<Zap size={12} />} label="Agent runs" value={fmtNum(totalRuns)} />
-                <MetricTile icon={<Activity size={12} />} label="Events" value={fmtNum(usage.length)} />
-                <MetricTile icon={<BarChart3 size={12} />} label="Tokens in" value={fmtNum(totalTokensIn)} />
-                <MetricTile icon={<BarChart3 size={12} />} label="Tokens out" value={fmtNum(totalTokensOut)} />
-                <MetricTile icon={<CreditCard size={12} />} label="Est. cost" value={fmt(totalCostCents)} />
-                <MetricTile icon={<Cpu size={12} />} label="Top model" value={topModel} />
+              <div className="acct-m-grid">
+                <MetricTile label="AI requests" value={fmtNum(totalRequests)} detail={`${usage.length} synced events`} />
+                <MetricTile
+                  label="Total tokens"
+                  value={fmtNum(totalTokensIn + totalTokensOut)}
+                  detail={`${fmtNum(totalTokensIn)} in / ${fmtNum(totalTokensOut)} out`}
+                />
+                <MetricTile
+                  label="Credits"
+                  value={creditsRemaining}
+                  detail={creditDetail}
+                />
+                <MetricTile label="AI edits" value={fmtNum(totalLines)} detail={topModel === "None yet" ? "No model data yet" : `Top model: ${topModel}`} />
               </div>
-            </div>
+            </section>
 
-            {/* Sign out */}
-            <div className="acct-section acct-section-last">
-              <button type="button" className="acct-signout-btn" onClick={() => void signOut()}>
-                <LogOut size={12} /> Sign out
+            <section className="acct-m-card-premium">
+              <div className="acct-m-card-content">
+                <div className="acct-m-card-title">Desktop access is linked</div>
+                <div className="acct-m-card-subtext">
+                  This device is signed in as {profile?.email || "your Codegrey account"}.
+                </div>
+              </div>
+            </section>
+
+            <div className="acct-m-footer">
+              <button type="button" className="acct-m-signout" onClick={() => void signOut()}>
+                Sign out
               </button>
+              <div className="acct-m-version">Codegrey desktop 1.2.0</div>
             </div>
           </div>
         )}

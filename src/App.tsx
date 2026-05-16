@@ -13,16 +13,16 @@ import {
   Brain,
   FolderOpen,
   Globe,
+  House,
   Terminal,
   Columns,
-  Play,
   Plus,
   Menu,
   File,
   PanelTopOpen,
   GitPullRequest,
 } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Onboarding, type WorkspaceMode } from "./pages/Onboarding";
 import { Workspace } from "./pages/Workspace";
 import { Settings as SettingsPage } from "./pages/Settings";
@@ -60,10 +60,11 @@ type WorkspaceStats = { added: number; deleted: number };
 
 export function App() {
   const [view, setView] = useState<"onboarding" | "workspace" | "settings" | "mcp-settings" | "accounts" | "knowledge">("onboarding");
-  const { auth } = useDesktopAuth();
+  const { auth, accountData } = useDesktopAuth();
   const [authSkipped, setAuthSkipped] = useState(false);
   const [appReady, setAppReady] = useState(false);
   const [browserTabRequest, setBrowserTabRequest] = useState(0);
+  const [workspaceHomeRequest, setWorkspaceHomeRequest] = useState(0);
   const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [selectedFileRequest, setSelectedFileRequest] = useState(0);
@@ -84,9 +85,39 @@ export function App() {
   const [appMenuOpen, setAppMenuOpen] = useState(false);
   const hydratedLayoutRootRef = useRef<string | null>(null);
   const appMenuRef = useRef<HTMLDivElement | null>(null);
+  const orderedWorkspaces = useMemo(() => {
+    if (!workspaceRoot) return workspaces;
+    const normalize = (path: string) => path.replace(/[\\/]+$/, "").toLowerCase();
+    const activeIndex = workspaces.findIndex((ws) => normalize(ws.path) === normalize(workspaceRoot));
+    if (activeIndex <= 0) return workspaces;
+    const activeWorkspace = workspaces[activeIndex];
+    return [
+      activeWorkspace,
+      ...workspaces.slice(0, activeIndex),
+      ...workspaces.slice(activeIndex + 1),
+    ];
+  }, [workspaces, workspaceRoot]);
+
+  const activeWorkspaceId = useMemo(() => {
+    if (!workspaceRoot) return null;
+    const normalize = (path: string) => path.replace(/[\\/]+$/, "").toLowerCase();
+    return workspaces.find((ws) => normalize(ws.path) === normalize(workspaceRoot))?.id || null;
+  }, [workspaces, workspaceRoot]);
+
+  const handleConversationCreated = (id: string) => {
+    setActiveConversationId(id);
+    setActiveConversationRequest(c => c + 1);
+    void reloadWorkspaces();
+  };
 
   const toggleTerminal = () => setTerminalOpen(!terminalOpen);
   const toggleWorkspaceViewMode = () => setWorkspaceViewMode((mode) => (mode === "agent" ? "split" : "agent"));
+  const goHome = () => {
+    setView(workspaceRoot ? "workspace" : "onboarding");
+    setSelectedFile(null);
+    setActiveConversationId(null);
+    setWorkspaceHomeRequest((request) => request + 1);
+  };
   const toggleWindowMaximize = async () => {
     const isMaximized = await window.codegrey?.windowControls?.toggleMaximize?.();
     if (typeof isMaximized === "boolean") setWindowMaximized(isMaximized);
@@ -282,6 +313,21 @@ export function App() {
   const runMenuAction = (action: () => void | Promise<void>) => {
     setAppMenuOpen(false);
     void action();
+  };
+
+  const openSidebarView = (nextView: SidebarView) => {
+    setSidebarView(nextView);
+    if (nextView === "mcp") {
+      setView("mcp-settings");
+      return;
+    }
+    if (nextView === "knowledge") {
+      setView("knowledge");
+      return;
+    }
+    if (view !== "workspace") {
+      setView("workspace");
+    }
   };
 
   const openSelectedFile = (path: string) => {
@@ -551,39 +597,40 @@ export function App() {
             </div>
           ) : null}
 
+          <div className="sidebar-scroll-area">
           <div className="sidebar-activity-bar">
             <button
               className={`activity-icon ${sidebarView === "files" ? "active" : ""}`}
               data-tooltip="Files"
-              onClick={() => setSidebarView("files")}
+              onClick={() => openSidebarView("files")}
             >
               <Files size={18} />
             </button>
             <button
               className={`activity-icon ${sidebarView === "search" ? "active" : ""}`}
               data-tooltip="Search"
-              onClick={() => setSidebarView("search")}
+              onClick={() => openSidebarView("search")}
             >
               <Search size={18} />
             </button>
             <button
               className={`activity-icon ${sidebarView === "source" ? "active" : ""}`}
               data-tooltip="Source Control"
-              onClick={() => setSidebarView("source")}
+              onClick={() => openSidebarView("source")}
             >
               <GitBranch size={18} />
             </button>
             <button
               className={`activity-icon ${sidebarView === "mcp" ? "active" : ""}`}
               data-tooltip="MCP"
-              onClick={() => setSidebarView("mcp")}
+              onClick={() => openSidebarView("mcp")}
             >
               <McpIcon size={18} />
             </button>
             <button
               className={`activity-icon ${sidebarView === "knowledge" ? "active" : ""}`}
               data-tooltip="Knowledge & Skills"
-              onClick={() => setSidebarView("knowledge")}
+              onClick={() => openSidebarView("knowledge")}
             >
               <Brain size={18} />
             </button>
@@ -669,7 +716,7 @@ export function App() {
               <span>WORKSPACES</span>
             </button>
             {sidebarSectionsOpen.workspaces ? <div className="sidebar-list">
-              {workspaces.map((ws) => {
+              {orderedWorkspaces.map((ws) => {
                 const isExpanded = !!expandedWorkspaces[ws.id];
                 const convs = conversations[ws.id] || [];
                 const stats = workspaceStats[ws.path] ?? { added: ws.added || 0, deleted: ws.deleted || 0 };
@@ -805,6 +852,7 @@ export function App() {
               })}
             </div> : null}
           </div>
+          </div>
 
           <div className="sidebar-footer">
             <button className="footer-action-btn" onClick={() => setView("accounts")}>
@@ -830,9 +878,9 @@ export function App() {
                 className="title-action-btn"
                 type="button"
                 data-tooltip="Home"
-                onClick={() => setView(workspaceRoot ? "workspace" : "onboarding")}
+                onClick={goHome}
               >
-                <FolderOpen size={15} />
+                <House size={15} />
               </button>
               <button
                 className="title-action-btn"
@@ -857,7 +905,7 @@ export function App() {
                 <Terminal size={15} />
               </button>
               <button
-                className="title-action-btn"
+                className="title-action-btn title-action-split"
                 type="button"
                 data-active={workspaceViewMode === "split" ? "true" : "false"}
                 data-tooltip={workspaceViewMode === "agent" ? "Switch to Split View" : "Switch to Agent View"}
@@ -867,17 +915,6 @@ export function App() {
                 }}
               >
                 <Columns size={15} />
-              </button>
-              <button 
-                className="title-action-btn" 
-                type="button" 
-                data-tooltip="Run Code"
-                onClick={() => {
-                  if (view !== "workspace") setView("workspace");
-                  // run logic here if any
-                }}
-              >
-                <Play size={15} fill="currentColor" />
               </button>
             </div>
           )}
@@ -919,8 +956,8 @@ export function App() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>
               <div className="spin" style={{ width: 20, height: 20, border: "2px solid var(--muted)", borderTopColor: "var(--text)", borderRadius: "50%" }} />
             </div>
-          ) : !auth.loggedIn && !authSkipped ? (
-            <AuthGate onSkip={() => setAuthSkipped(true)} />
+          ) : view === "onboarding" && !auth.loggedIn && !authSkipped ? (
+            <AuthGate showSkip={true} onSkip={() => setAuthSkipped(true)} />
           ) : view === "onboarding" ? (
             <Onboarding onComplete={startOnboardingWorkspace} />
           ) : view === "settings" ? (
@@ -941,29 +978,22 @@ export function App() {
               selectedFile={selectedFile}
               selectedFileRequest={selectedFileRequest}
               getFileIcon={getFileIcon}
-              onRequestOpenFolder={openFolder}
-              onCreateFile={createEditorFile}
+              onRequestOpenFolder={() => setView("onboarding")}
               terminalOpen={terminalOpen}
               setTerminalOpen={setTerminalOpen}
               viewMode={workspaceViewMode}
               browserTabRequest={browserTabRequest}
-              activeWorkspaceId={workspaces.find(w => w.path === workspaceRoot)?.id}
+              homeRequest={workspaceHomeRequest}
+              activeWorkspaceId={activeWorkspaceId}
               activeConversationId={activeConversationId}
               activeConversationRequest={activeConversationRequest}
-              onConversationCreated={async (id) => {
-                setSelectedFile(null);
-                setActiveConversationId(id);
-                setActiveConversationRequest((request) => request + 1);
-                const wsId = workspaces.find(w => w.path === workspaceRoot)?.id;
-                if (wsId) {
-                  const convs = await window.codegrey?.brain?.getConversations?.(wsId) || [];
-                  setConversations(prev => ({ ...prev, [wsId]: convs }));
-                  setExpandedWorkspaces(prev => ({ ...prev, [wsId]: true }));
-                }
-              }}
+              onConversationCreated={handleConversationCreated}
               onCloseConversation={() => setActiveConversationId(null)}
               onClearSelectedFile={() => setSelectedFile(null)}
               onOpenMcpSettings={() => setView("mcp-settings")}
+              onOpenAccounts={() => setView("accounts")}
+              isLoggedIn={auth.loggedIn}
+              userPlan={accountData?.subscription?.plan ?? accountData?.profile?.plan ?? auth.user?.plan ?? "free"}
             />
           )}
 

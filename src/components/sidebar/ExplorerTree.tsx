@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FilePlus, FolderPlus, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, FilePlus, FolderPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getFileIcon } from "../../lib/utils";
 
@@ -316,7 +316,7 @@ export function ExplorerTree({
                 setContextMenu(null);
                 void createEntry(false, contextMenu.entry.path);
               }}>
-                <FilePlus size={14} />
+                <span className="seti-icon" style={{ fontSize: '14px' }}>{'\uE064'}</span>
                 <span>New File</span>
               </button>
               <button type="button" onClick={() => {
@@ -324,18 +324,18 @@ export function ExplorerTree({
                 setContextMenu(null);
                 void createEntry(true, contextMenu.entry.path);
               }}>
-                <FolderPlus size={14} />
+                <span className="seti-icon" style={{ fontSize: '14px' }}>{'\uE032'}</span>
                 <span>New Folder</span>
               </button>
               <div className="explorer-context-separator" />
             </>
           ) : null}
           <button type="button" onClick={() => beginRename(contextMenu.entry)}>
-            <Pencil size={14} />
+            <span className="seti-icon" style={{ fontSize: '14px' }}>{'\uE088'}</span>
             <span>Rename</span>
           </button>
           <button type="button" onClick={() => void deleteEntry(contextMenu.entry)}>
-            <Trash2 size={14} />
+            <span className="seti-icon" style={{ fontSize: '14px' }}>{'\uE02B'}</span>
             <span>Delete</span>
           </button>
         </div>
@@ -347,7 +347,18 @@ export function ExplorerTree({
 function ExplorerFileIcon({ name }: { name: string }) {
   const icon = getFileIcon(name) as { svg?: string; char?: string; color?: string };
   if (icon.svg) {
-    return <img src={icon.svg} alt="" style={{ width: 14, height: 14, marginRight: 8, flexShrink: 0 }} />;
+    return (
+      <img
+        src={icon.svg}
+        alt=""
+        style={{
+          width: 14,
+          height: 14,
+          marginRight: 8,
+          flexShrink: 0,
+        }}
+      />
+    );
   }
 
   return (

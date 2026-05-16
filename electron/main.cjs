@@ -7,15 +7,35 @@ const { startServer: startBackendServer } = require("../backend/server");
 const { startServer: startMcpServer } = require("../mcp-backend/server");
 
 const isDev = !app.isPackaged;
-const MIN_WIDTH = 920;
-const MIN_HEIGHT = 680;
+const MIN_WIDTH = 400;
+const MIN_HEIGHT = 400;
 const DEFAULT_WIDTH = 1368;
 const DEFAULT_HEIGHT = 1030;
+const DEFAULT_WEBSITE_URL = "https://codegreyapp.vercel.app";
+const DEFAULT_SUPABASE_URL = "https://fdizzpftrynhlaawsjpq.supabase.co";
+const DEFAULT_SUPABASE_ANON_KEY = "sb_publishable_i6MMYWQLq8nAup-pUj4iGw_ls3VcguL";
 let backendServer = null;
 let mcpServer = null;
 let workspaceRoot = null;
 
 const BRAIN_DIR = path.join(__dirname, "..", "brain");
+
+function getWebsiteUrl() {
+  return (process.env.CODEGREY_WEBSITE_URL || process.env.VITE_WEBSITE_URL || DEFAULT_WEBSITE_URL).replace(/\/+$/, "");
+}
+
+function getSupabaseUrl() {
+  return (process.env.CODEGREY_SUPABASE_URL || process.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL).replace(/\/+$/, "");
+}
+
+function getSupabaseAnonKey() {
+  return (
+    process.env.CODEGREY_SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    DEFAULT_SUPABASE_ANON_KEY
+  );
+}
 
 function initBrain() {
   if (!fs.existsSync(BRAIN_DIR)) {
@@ -730,6 +750,7 @@ app.whenReady().then(async () => {
     if (!needle) return [];
     const maxResults = Math.min(Number(opts?.maxResults) || 300, 1000);
     const include = String(opts?.include || "").trim().toLowerCase();
+    const mode = opts?.mode || "content"; // "content" or "filename"
     const results = [];
     const lowerNeedle = needle.toLowerCase();
 
@@ -746,26 +767,36 @@ app.whenReady().then(async () => {
         if (entry.name.startsWith(".") && entry.name !== ".env") continue;
         const full = path.join(dir, entry.name);
         if (!safePathWithinRoot(workspaceRoot, full)) continue;
+
+        if (mode === "filename") {
+          if (entry.name.toLowerCase().includes(lowerNeedle)) {
+            results.push({ filePath: full, isDir: entry.isDirectory() });
+          }
+        }
+
         if (entry.isDirectory()) {
           if (!isIgnoredDir(entry.name)) walk(full);
           continue;
         }
-        if (!entry.isFile()) continue;
-        if (include && !entry.name.toLowerCase().includes(include)) continue;
-        let stat;
-        try {
-          stat = fs.statSync(full);
-          if (stat.size > 1024 * 1024) continue;
-          const text = fs.readFileSync(full, "utf8");
-          const lines = text.split(/\r?\n/);
-          for (let i = 0; i < lines.length; i += 1) {
-            if (lines[i].toLowerCase().includes(lowerNeedle)) {
-              results.push({ filePath: full, line: i + 1, preview: lines[i].trim().slice(0, 240) });
-              if (results.length >= maxResults) break;
+
+        if (mode === "content") {
+          if (!entry.isFile()) continue;
+          if (include && !entry.name.toLowerCase().includes(include)) continue;
+          let stat;
+          try {
+            stat = fs.statSync(full);
+            if (stat.size > 1024 * 1024) continue;
+            const text = fs.readFileSync(full, "utf8");
+            const lines = text.split(/\r?\n/);
+            for (let i = 0; i < lines.length; i += 1) {
+              if (lines[i].toLowerCase().includes(lowerNeedle)) {
+                results.push({ filePath: full, line: i + 1, preview: lines[i].trim().slice(0, 240) });
+                if (results.length >= maxResults) break;
+              }
             }
+          } catch {
+            // skip binary/unreadable files
           }
-        } catch {
-          // skip binary/unreadable files
         }
       }
     }
@@ -923,8 +954,8 @@ app.whenReady().then(async () => {
         }
 
         try {
-          const supabaseUrl = process.env.CODEGREY_SUPABASE_URL || "https://fdizzpftrynhlaawsjpq.supabase.co";
-          const supabaseAnonKey = process.env.CODEGREY_SUPABASE_ANON_KEY || "";
+          const supabaseUrl = getSupabaseUrl();
+          const supabaseAnonKey = getSupabaseAnonKey();
           const resp = await fetch(`${supabaseUrl}/functions/v1/desktop-exchange`, {
             method: "POST",
             headers: {
@@ -951,7 +982,7 @@ app.whenReady().then(async () => {
       server.listen(0, "127.0.0.1", () => {
         const port = server.address().port;
         const callback = `http://127.0.0.1:${port}/cb`;
-        const loginUrl = new URL(`${process.env.CODEGREY_WEBSITE_URL || "https://codegreyapp.vercel.app"}/auth/login`);
+        const loginUrl = new URL(`${getWebsiteUrl()}/auth/login`);
         loginUrl.searchParams.set("callback", callback);
         loginUrl.searchParams.set("state", state);
         loginUrl.searchParams.set("client", "Codegrey Desktop");
@@ -971,18 +1002,24 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("auth:fetchAccount", async (event, accessToken) => {
-    const SUPABASE_URL = process.env.CODEGREY_SUPABASE_URL;
-    const SUPABASE_KEY = process.env.CODEGREY_SUPABASE_ANON_KEY || "";
+    const SUPABASE_URL = getSupabaseUrl();
+    const SUPABASE_KEY = getSupabaseAnonKey();
     const headers = {
       "apikey": SUPABASE_KEY,
       "Authorization": `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     };
     try {
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+      const usageSince = monthStart < thirtyDaysAgo ? monthStart : thirtyDaysAgo;
+      const usageSinceParam = encodeURIComponent(usageSince.toISOString());
       const [profRes, subRes, usageRes] = await Promise.all([
         fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id,email,full_name,avatar_url,plan&limit=1`, { headers }),
         fetch(`${SUPABASE_URL}/rest/v1/subscriptions?select=plan,status,monthly_price_cents,current_period_end,cancel_at_period_end&limit=1`, { headers }),
-        fetch(`${SUPABASE_URL}/rest/v1/usage_events?select=event_type,model,tokens_in,tokens_out,lines,cost_cents,created_at&created_at=gte.${new Date(Date.now()-30*24*3600*1000).toISOString()}&order=created_at.desc`, { headers }),
+        fetch(`${SUPABASE_URL}/rest/v1/usage_events?select=event_type,model,tokens_in,tokens_out,lines,cost_cents,created_at&created_at=gte.${usageSinceParam}&order=created_at.desc`, { headers }),
       ]);
       const [profiles, subscriptions, usage] = await Promise.all([profRes.json(), subRes.json(), usageRes.json()]);
       return { profile: profiles?.[0] ?? null, subscription: subscriptions?.[0] ?? null, usage: Array.isArray(usage) ? usage : [] };

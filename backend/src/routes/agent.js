@@ -12,6 +12,15 @@ const express = require("express");
 const router = express.Router();
 const { runAgentLoop } = require("../loop/agentLoop");
 const { createProvider } = require("../providers");
+const { resolveAiRequest } = require("../models/aiRequest");
+const {
+  UsageLimitError,
+  checkUsageAllowance,
+  countChangedLines,
+  estimateTokens,
+  getAccessToken,
+  recordUsageEvent,
+} = require("../usage/supabaseUsage");
 
 function extractText(contentBlocks) {
   if (!Array.isArray(contentBlocks)) return typeof contentBlocks === 'string' ? contentBlocks : '';
@@ -63,7 +72,7 @@ function getOrCreateSession(sessionId) {
  *   data: {"type": "error", "message": "..."}          — Error
  */
 router.post("/agent/chat", async (req, res) => {
-  const { sessionId, message, images = [], workspaceRoot, editorContext, aiSettings, agentMode = "propose", workspaceId } = req.body;
+  const { sessionId, message, images = [], workspaceRoot, editorContext, aiSettings, aiRequest, agentMode = "propose", workspaceId } = req.body;
 
   if (!sessionId || !message) {
     return res.status(400).json({ error: "sessionId and message are required" });
@@ -71,6 +80,23 @@ router.post("/agent/chat", async (req, res) => {
 
   if (!workspaceRoot) {
     return res.status(400).json({ error: "workspaceRoot is required" });
+  }
+
+  const accessToken = getAccessToken(req);
+  let resolvedAi;
+  try {
+    resolvedAi = resolveAiRequest({ aiRequest, aiSettings, accessToken });
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message, code: err.code });
+  }
+  let usageAllowance = { syncEnabled: false, reason: "not_signed_in" };
+  try {
+    usageAllowance = await checkUsageAllowance(accessToken, { keySource: resolvedAi.keySource });
+  } catch (err) {
+    if (err instanceof UsageLimitError) {
+      return res.status(err.status).json({ error: err.message, code: err.code, ...err.details });
+    }
+    console.warn("[Usage] allowance check failed:", err.message);
   }
 
   // Set up SSE
@@ -118,13 +144,14 @@ router.post("/agent/chat", async (req, res) => {
   }
 
   try {
+    let changedLines = 0;
     const { finalMessage, updatedHistory, toolsUsed, iterations } = await runAgentLoop({
       userMessage: enrichedMessage,
       conversationHistory: session.history,
       workspaceRoot: session.workspaceRoot,
       workspaceId: workspaceId || null,
       projectContext: session.projectContext,
-      aiSettings,
+      aiSettings: resolvedAi.settings,
       agentMode,
       abortSignal: abortController.signal,
       onStream: (event) => {
@@ -146,6 +173,7 @@ router.post("/agent/chat", async (req, res) => {
         });
       },
       onFileChange: ({ filePath, oldContent, newContent, autoApplied, toolName, toolId, iteration }) => {
+        changedLines += countChangedLines(oldContent, newContent);
         send({
           type: "file_change_proposed",
           filePath,
@@ -162,6 +190,18 @@ router.post("/agent/chat", async (req, res) => {
     // Save updated history
     session.history = updatedHistory;
 
+    const usage = {
+      tokensIn: estimateTokens(enrichedText),
+      tokensOut: estimateTokens(finalMessage),
+      lines: changedLines,
+      model: resolvedAi.settings?.model || null,
+      modelId: resolvedAi.modelId || null,
+      keySource: resolvedAi.keySource,
+    };
+    await recordUsageEvent(accessToken, usageAllowance, usage).catch((err) => {
+      console.warn("[Usage] record failed:", err.message);
+    });
+
     // Send completion event
     if (!clientClosed) {
       send({
@@ -169,6 +209,7 @@ router.post("/agent/chat", async (req, res) => {
         finalMessage,
         iterations,
         toolsUsed: toolsUsed.map((t) => t.name),
+        usage,
       });
     }
 
@@ -187,10 +228,27 @@ router.post("/agent/chat", async (req, res) => {
  * Same as above but waits for the full response. Simpler to integrate.
  */
 router.post("/agent/chat/sync", async (req, res) => {
-  const { sessionId, message, workspaceRoot, editorContext, aiSettings, agentMode = "propose" } = req.body;
+  const { sessionId, message, workspaceRoot, editorContext, aiSettings, aiRequest, agentMode = "propose" } = req.body;
 
   if (!sessionId || !message || !workspaceRoot) {
     return res.status(400).json({ error: "sessionId, message, and workspaceRoot are required" });
+  }
+
+  const accessToken = getAccessToken(req);
+  let resolvedAi;
+  try {
+    resolvedAi = resolveAiRequest({ aiRequest, aiSettings, accessToken });
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message, code: err.code });
+  }
+  let usageAllowance = { syncEnabled: false, reason: "not_signed_in" };
+  try {
+    usageAllowance = await checkUsageAllowance(accessToken, { keySource: resolvedAi.keySource });
+  } catch (err) {
+    if (err instanceof UsageLimitError) {
+      return res.status(err.status).json({ error: err.message, code: err.code, ...err.details });
+    }
+    console.warn("[Usage] allowance check failed:", err.message);
   }
 
   const session = getOrCreateSession(sessionId);
@@ -205,25 +263,41 @@ router.post("/agent/chat/sync", async (req, res) => {
   const toolCallLog = [];
 
   try {
+    let changedLines = 0;
     const { finalMessage, updatedHistory, toolsUsed, iterations } = await runAgentLoop({
       userMessage: enrichedMessage,
       conversationHistory: session.history,
       workspaceRoot: session.workspaceRoot,
       projectContext: session.projectContext,
-      aiSettings,
+      aiSettings: resolvedAi.settings,
       agentMode,
       onToolCall: ({ toolName, toolInput }) => {
         toolCallLog.push({ tool: toolName, input: toolInput });
       },
+      onFileChange: ({ oldContent, newContent }) => {
+        changedLines += countChangedLines(oldContent, newContent);
+      },
     });
 
     session.history = updatedHistory;
+    const usage = {
+      tokensIn: estimateTokens(enrichedMessage),
+      tokensOut: estimateTokens(finalMessage),
+      lines: changedLines,
+      model: resolvedAi.settings?.model || null,
+      modelId: resolvedAi.modelId || null,
+      keySource: resolvedAi.keySource,
+    };
+    await recordUsageEvent(accessToken, usageAllowance, usage).catch((err) => {
+      console.warn("[Usage] record failed:", err.message);
+    });
 
     res.json({
       message: finalMessage,
       toolsUsed: toolsUsed.map((t) => ({ name: t.name, iteration: t.iteration })),
       toolLog: toolCallLog,
       iterations,
+      usage,
     });
   } catch (err) {
     console.error("[AgentLoop Error]", err);
@@ -277,10 +351,12 @@ router.post("/agent/clear", (req, res) => {
 });
 
 router.post("/agent/title", async (req, res) => {
-  const { message, aiSettings } = req.body;
+  const { message, aiSettings, aiRequest } = req.body;
   if (!message) return res.status(400).json({ error: "message is required" });
   try {
-    const provider = createProvider(aiSettings);
+    const accessToken = getAccessToken(req);
+    const resolvedAi = resolveAiRequest({ aiRequest, aiSettings, accessToken });
+    const provider = createProvider(resolvedAi.settings);
     const systemPrompt = "You are a conversation analyzer. Generate a short, 2-to-4 word title for a chat based on the user's first message. Respond ONLY with the title wrapped in <title>...</title> tags. Do not include any other text.";
     const response = await provider.call({
       systemPrompt,
