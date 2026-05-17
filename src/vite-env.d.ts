@@ -1,74 +1,86 @@
 /// <reference types="vite/client" />
 
-interface Window {
-  codegrey?: {
-    platform: string;
-    windowControls?: {
-      minimize: () => Promise<void>;
-      toggleMaximize: () => Promise<boolean>;
-      isMaximized: () => Promise<boolean>;
-      onMaximizedChange: (handler: (isMaximized: boolean) => void) => () => void;
-      close: () => Promise<void>;
-      newWindow?: () => Promise<void>;
-      newEmptyWindow?: () => Promise<void>;
-      openExternal?: (url: string) => Promise<void>;
+declare global {
+  interface Window {
+    codegrey?: {
+      platform: string;
+      windowControls?: {
+        minimize: () => Promise<void>;
+        toggleMaximize: () => Promise<boolean>;
+        isMaximized: () => Promise<boolean>;
+        onMaximizedChange: (handler: (isMaximized: boolean) => void) => () => void;
+        showTitleBarMenu: () => void;
+        close: () => Promise<void>;
+        newWindow?: () => Promise<void>;
+        newEmptyWindow?: () => Promise<void>;
+        openExternal?: (url: string) => Promise<void>;
+      };
+      workspace?: {
+        getRoot: () => Promise<string | null>;
+        clearRoot: () => Promise<null>;
+        openFolder: () => Promise<string | null>;
+        openFile?: () => Promise<{ root: string; filePath: string } | null>;
+        openFolderByPath: (targetPath: string) => Promise<string | null>;
+        listDir: (dirPath: string) => Promise<Array<{ name: string; path: string; isDir: boolean }>>;
+        readFile: (filePath: string) => Promise<string | null>;
+        writeFile: (filePath: string, content: string) => Promise<{ ok: boolean; error?: string }>;
+        deleteFile: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
+        createEntry?: (parentDir: string, name: string, isDir: boolean) => Promise<{ ok: boolean; path?: string; error?: string }>;
+        renameEntry?: (entryPath: string, newName: string) => Promise<{ ok: boolean; path?: string; error?: string }>;
+        deleteEntry?: (entryPath: string) => Promise<{ ok: boolean; error?: string }>;
+        search?: (query: string, opts?: { include?: string; maxResults?: number; mode?: "filename" | "content" }) => Promise<Array<{ filePath: string; line?: number; preview?: string; isDir?: boolean }>>;
+        cloneRepo?: (repoUrl: string, parentDir?: string | null) => Promise<{ ok: boolean; path?: string; error?: string }>;
+        onCloneProgress?: (handler: (msg: { line: string }) => void) => (() => void);
+      };
+      git?: {
+        status: () => Promise<{ ok: boolean; branch?: string; files: Array<{ path: string; index: string; workingTree: string }>; error?: string }>;
+        statusForPath?: (targetPath: string) => Promise<{ ok: boolean; branch?: string; files: Array<{ path: string; index: string; workingTree: string }>; error?: string }>;
+        diff: (filePath?: string, staged?: boolean) => Promise<{ ok: boolean; diff: string; error?: string }>;
+        stage: (filePath?: string) => Promise<{ ok: boolean; error?: string }>;
+        unstage: (filePath?: string) => Promise<{ ok: boolean; error?: string }>;
+        commit: (message: string) => Promise<{ ok: boolean; stdout?: string; error?: string }>;
+        getStatus?: (path: string) => Promise<{ added: number; deleted: number }>;
+      };
+      brain?: {
+        getWorkspaces: () => Promise<Array<{ id: string; path: string; name: string; added: number; deleted: number }>>;
+        trackWorkspace: (wsPath: string, name?: string) => Promise<Array<any>>;
+        updateWorkspaceStats: (wsPath: string, added: number, deleted: number) => Promise<void>;
+        getConversations: (workspaceId: string) => Promise<Array<{ id: string; workspaceId: string; name: string; createdAt: number; updatedAt: number }>>;
+        createConversation: (workspaceId: string, name?: string) => Promise<{ id: string; workspaceId: string; name: string; createdAt: number; updatedAt: number }>;
+        getConversationMessages?: (workspaceId: string, conversationId: string) => Promise<any[]>;
+        saveConversationMessages?: (workspaceId: string, conversationId: string, messages: any[]) => Promise<void>;
+        renameConversation?: (workspaceId: string, conversationId: string, newName: string) => Promise<any>;
+        deleteConversation?: (workspaceId: string, conversationId: string) => Promise<boolean>;
+      };
+      settings?: {
+        get: () => Promise<any>;
+        set: (partial: Partial<any>) => Promise<any>;
+        testConnection: (config: any) => Promise<{ ok: boolean; error?: string }>;
+      };
+      terminal?: {
+        create: (opts: { cols: number; rows: number; cwd?: string; shell?: string }) => Promise<{ id: string } | null>;
+        write: (payload: { id: string; data: string }) => Promise<void>;
+        resize: (payload: { id: string; cols: number; rows: number }) => Promise<void>;
+        kill: (payload: { id: string }) => Promise<void>;
+        onData: (handler: (msg: { id: string; data: string }) => void) => () => void;
+        onExit: (handler: (msg: { id: string }) => void) => () => void;
+      };
+      readFileBinary?: (filePath: string) => Promise<{ base64: string } | null>;
+      auth?: {
+        // New simplified API
+        getAuthStatus: () => Promise<{ loggedIn: boolean; user: any }>;
+        onAuthChange: (handler: (status: any) => void) => () => void;
+        getProfile: () => Promise<any>;
+        logout: () => Promise<void>;
+        // Legacy/Direct token API
+        loadTokens: () => Promise<{ access_token: string; refresh_token: string; user: any; roles: string[] } | null>;
+        saveTokens: (tokens: any) => Promise<boolean>;
+        signOut: () => Promise<boolean>;
+        startLogin: () => Promise<{ access_token: string; refresh_token: string; user: any; roles: string[] }>;
+        fetchAccount: (accessToken: string) => Promise<{ profile: any; subscription: any; usage: any[] } | null>;
+      };
     };
-    workspace?: {
-      getRoot: () => Promise<string | null>;
-      clearRoot: () => Promise<null>;
-      openFolder: () => Promise<string | null>;
-      openFile?: () => Promise<{ root: string; filePath: string } | null>;
-      openFolderByPath: (targetPath: string) => Promise<string | null>;
-      listDir: (dirPath: string) => Promise<Array<{ name: string; path: string; isDir: boolean }>>;
-      readFile: (filePath: string) => Promise<string | null>;
-      writeFile: (filePath: string, content: string) => Promise<{ ok: boolean; error?: string }>;
-      deleteFile: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
-      createEntry?: (parentDir: string, name: string, isDir: boolean) => Promise<{ ok: boolean; path?: string; error?: string }>;
-      renameEntry?: (entryPath: string, newName: string) => Promise<{ ok: boolean; path?: string; error?: string }>;
-      deleteEntry?: (entryPath: string) => Promise<{ ok: boolean; error?: string }>;
-      search?: (query: string, opts?: { include?: string; maxResults?: number; mode?: "filename" | "content" }) => Promise<Array<{ filePath: string; line?: number; preview?: string; isDir?: boolean }>>;
-      cloneRepo?: (repoUrl: string, parentDir?: string | null) => Promise<{ ok: boolean; path?: string; error?: string }>;
-      onCloneProgress?: (handler: (msg: { line: string }) => void) => (() => void);
-    };
-    git?: {
-      status: () => Promise<{ ok: boolean; branch?: string; files: Array<{ path: string; index: string; workingTree: string }>; error?: string }>;
-      statusForPath?: (targetPath: string) => Promise<{ ok: boolean; branch?: string; files: Array<{ path: string; index: string; workingTree: string }>; error?: string }>;
-      diff: (filePath?: string, staged?: boolean) => Promise<{ ok: boolean; diff: string; error?: string }>;
-      stage: (filePath?: string) => Promise<{ ok: boolean; error?: string }>;
-      unstage: (filePath?: string) => Promise<{ ok: boolean; error?: string }>;
-      commit: (message: string) => Promise<{ ok: boolean; stdout?: string; error?: string }>;
-    };
-    brain?: {
-      getWorkspaces: () => Promise<Array<{ id: string; path: string; name: string; added: number; deleted: number }>>;
-      trackWorkspace: (wsPath: string, name?: string) => Promise<Array<any>>;
-      updateWorkspaceStats: (wsPath: string, added: number, deleted: number) => Promise<void>;
-      getConversations: (workspaceId: string) => Promise<Array<{ id: string; workspaceId: string; name: string; createdAt: number; updatedAt: number }>>;
-      createConversation: (workspaceId: string, name?: string) => Promise<{ id: string; workspaceId: string; name: string; createdAt: number; updatedAt: number }>;
-      getConversationMessages?: (workspaceId: string, conversationId: string) => Promise<any[]>;
-      saveConversationMessages?: (workspaceId: string, conversationId: string, messages: any[]) => Promise<void>;
-      renameConversation?: (workspaceId: string, conversationId: string, newName: string) => Promise<any>;
-      deleteConversation?: (workspaceId: string, conversationId: string) => Promise<boolean>;
-    };
-    settings?: {
-      get: () => Promise<import("./types/ai").AiSettings>;
-      set: (partial: Partial<import("./types/ai").AiSettings>) => Promise<import("./types/ai").AiSettings>;
-      testConnection: (config: import("./types/ai").AiSettings) => Promise<{ ok: boolean; error?: string }>;
-    };
-    terminal?: {
-      create: (opts: { cols: number; rows: number; cwd?: string; shell?: string }) => Promise<{ id: string } | null>;
-      write: (payload: { id: string; data: string }) => Promise<void>;
-      resize: (payload: { id: string; cols: number; rows: number }) => Promise<void>;
-      kill: (payload: { id: string }) => Promise<void>;
-      onData: (handler: (msg: { id: string; data: string }) => void) => () => void;
-      onExit: (handler: (msg: { id: string }) => void) => () => void;
-    };
-    readFileBinary?: (filePath: string) => Promise<{ base64: string } | null>;
-    auth?: {
-      loadTokens: () => Promise<{ access_token: string; refresh_token: string; user: any; roles: string[] } | null>;
-      saveTokens: (tokens: any) => Promise<boolean>;
-      signOut: () => Promise<boolean>;
-      startLogin: () => Promise<{ access_token: string; refresh_token: string; user: any; roles: string[] }>;
-      fetchAccount: (accessToken: string) => Promise<{ profile: any; subscription: any; usage: any[] } | null>;
-    };
-  };
+  }
 }
+
+export {};

@@ -1,5 +1,5 @@
 import { Check, Circle, GitBranch, RefreshCw, Undo2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 
 type GitFile = { path: string; index: string; workingTree: string };
 type GitStatus = { ok: boolean; branch?: string; files: GitFile[]; error?: string };
@@ -19,23 +19,39 @@ export function SourceControlPanel({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
 
-  const refresh = async () => {
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const refresh = useCallback(async () => {
     if (!workspaceRoot) {
-      setStatus({ ok: true, files: [] });
+      if (isMountedRef.current) setStatus({ ok: true, files: [] });
       return;
     }
     const next = await window.codegrey?.git?.status?.();
-    const normalized = next ?? { ok: false, files: [], error: "Git is unavailable." };
-    setStatus(normalized);
-    onStatusChange?.(normalized);
-  };
+    if (isMountedRef.current) {
+      const normalized = next ?? { ok: false, files: [], error: "Git is unavailable." };
+      setStatus(normalized);
+      onStatusChange?.(normalized);
+    }
+  }, [workspaceRoot, onStatusChange]);
 
   useEffect(() => {
-    void refresh();
+    const timer = window.setTimeout(() => {
+      void refresh();
+    }, 150);
+
     const onRefresh = () => void refresh();
     window.addEventListener("codegrey:explorer-refresh", onRefresh);
-    return () => window.removeEventListener("codegrey:explorer-refresh", onRefresh);
-  }, [workspaceRoot]);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("codegrey:explorer-refresh", onRefresh);
+    };
+  }, [workspaceRoot, refresh]);
 
   const stagedCount = useMemo(
     () => status.files.filter((file) => file.index.trim() && file.index !== "?").length,

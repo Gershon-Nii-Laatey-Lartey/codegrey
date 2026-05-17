@@ -6,6 +6,7 @@ import {
   Lock,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import "./onboarding.css";
 
 export type Intent = "build" | "fix" | "review" | "learn" | "explore";
 export type WorkspaceMode = "local" | "git" | "blank";

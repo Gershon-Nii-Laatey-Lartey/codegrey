@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 
 type SearchResult = { filePath: string; line?: number; preview?: string };
 
@@ -15,16 +15,26 @@ export function SearchPanel({
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
 
-  const runSearch = async () => {
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const runSearch = useCallback(async () => {
     if (!query.trim()) {
-      setResults([]);
+      if (isMountedRef.current) setResults([]);
       return;
     }
-    setSearching(true);
+    if (isMountedRef.current) setSearching(true);
     const next = await window.codegrey?.workspace?.search?.(query, { include, maxResults: 500 });
-    setResults(next ?? []);
-    setSearching(false);
-  };
+    if (isMountedRef.current) {
+      setResults(next ?? []);
+      setSearching(false);
+    }
+  }, [query, include]);
 
   useEffect(() => {
     if (!workspaceRoot) {
@@ -37,8 +47,7 @@ export function SearchPanel({
     }, 220);
 
     return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, include, workspaceRoot]);
+  }, [query, include, workspaceRoot, runSearch]);
 
   return (
     <div className="sidebar-tool-panel">

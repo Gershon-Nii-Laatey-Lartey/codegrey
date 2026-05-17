@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import "./knowledge.css";
 
 const API_BASE = "http://localhost:3172/api";
 

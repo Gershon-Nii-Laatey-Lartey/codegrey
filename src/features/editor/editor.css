@@ -1,0 +1,140 @@
+/* src/features/editor/editor.css */
+
+.editor-tabs {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  background: var(--bg);
+  padding: 0 10px;
+  border-bottom: 0px solid var(--line);
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.editor-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-tab {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 140ms ease;
+  white-space: nowrap;
+}
+
+.editor-tab:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.editor-tab[data-active="true"] {
+  background: #333333;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--white);
+}
+
+.tab-close {
+  opacity: 0.4;
+  margin-left: 2px;
+  transition: opacity 140ms ease;
+}
+
+.tab-close:hover {
+  opacity: 1;
+}
+
+.tabs-plus-btn {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 140ms ease;
+}
+
+.tabs-plus-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.tabs-plus-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.editor-surface {
+  height: 100%;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.editor-pane {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.monaco-wrap {
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  color: var(--muted-strong);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.editor-header span {
+  font-size: 12px;
+  font-weight: 560;
+  color: var(--text);
+}
+
+.editor-empty {
+  height: 100%;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.ide-composer-float {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 18px 24px 24px;
+  display: flex;
+  justify-content: center;
+  background: linear-gradient(180deg, rgba(21, 21, 21, 0), rgba(21, 21, 21, 0.92) 40%, rgba(21, 21, 21, 1));
+  pointer-events: none;
+  z-index: 100;
+}
+
+.ide-composer-float .chat-input-wrapper {
+  pointer-events: auto;
+}

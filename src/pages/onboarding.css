@@ -1,0 +1,130 @@
+/* src/pages/onboarding.css */
+
+.onboarding-panel {
+  width: min(100%, 680px);
+  min-height: min-content;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 40px 18px;
+  background: transparent;
+}
+
+.intro {
+  text-align: center;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+h1 {
+  max-width: 500px;
+  margin: 0;
+  color: var(--text);
+  font-size: 31px;
+  line-height: 1.12;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.subtitle {
+  max-width: 460px;
+  margin: 11px auto 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.42;
+}
+
+.intent-grid {
+  width: min(100%, 460px);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.choice-button,
+.workspace-option {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.choice-button:hover,
+.workspace-option:hover {
+  border-color: var(--line-strong);
+  background: var(--panel-soft);
+}
+
+.choice-button {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.choice-button[data-selected="true"] {
+  border-color: rgba(116, 168, 255, 0.72);
+  color: var(--white);
+  background: rgba(93, 124, 255, 0.12);
+}
+
+.choice-button svg {
+  color: var(--accent-2);
+  flex: 0 0 auto;
+}
+
+.workspace-options {
+  width: min(100%, 460px);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.workspace-option {
+  min-height: 82px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 10px;
+  border-radius: 14px;
+  text-align: left;
+}
+
+.workspace-option svg {
+  color: var(--muted-strong);
+}
+
+.workspace-option strong,
+.workspace-option small {
+  display: block;
+}
+
+.workspace-option strong {
+  margin-bottom: 4px;
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 560;
+  color: var(--text);
+}
+
+.workspace-option small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+}

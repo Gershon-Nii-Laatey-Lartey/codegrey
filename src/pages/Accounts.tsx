@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { BILLING_URL, useDesktopAuth } from "../lib/desktopAuth";
 import { AuthGate } from "./AuthGate";
+import "./accounts.css";
 
 function PlanBadge({ plan }: { plan: string }) {
   const labels: Record<string, string> = {

@@ -22,7 +22,7 @@ import {
   PanelTopOpen,
   GitPullRequest,
 } from "lucide-react";
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { Onboarding, type WorkspaceMode } from "./pages/Onboarding";
 import { Workspace } from "./pages/Workspace";
 import { Settings as SettingsPage } from "./pages/Settings";
@@ -34,7 +34,10 @@ import { SourceControlPanel } from "./components/sidebar/SourceControlPanel";
 import { McpPanel } from "./components/sidebar/McpPanel";
 import { McpSettings } from "./pages/McpSettings";
 import { AuthGate } from "./pages/AuthGate";
-import { useDesktopAuth } from "./lib/desktopAuth";
+import { useAppAuth } from "./hooks/useAppAuth";
+import { useAppLayout } from "./hooks/useAppLayout";
+import { useWorkspaces } from "./hooks/useWorkspaces";
+import { useGitStatus } from "./hooks/useGitStatus";
 
 import { readWorkspaceLayout, writeWorkspaceLayout } from "./lib/workspaceLayout";
 import { getFileIcon } from "./lib/utils";
@@ -59,32 +62,38 @@ type SidebarView = "files" | "search" | "source" | "mcp" | "knowledge";
 type WorkspaceStats = { added: number; deleted: number };
 
 export function App() {
-  const [view, setView] = useState<"onboarding" | "workspace" | "settings" | "mcp-settings" | "accounts" | "knowledge">("onboarding");
-  const { auth, accountData } = useDesktopAuth();
-  const [authSkipped, setAuthSkipped] = useState(false);
-  const [appReady, setAppReady] = useState(false);
-  const [browserTabRequest, setBrowserTabRequest] = useState(0);
-  const [workspaceHomeRequest, setWorkspaceHomeRequest] = useState(0);
   const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [selectedFileRequest, setSelectedFileRequest] = useState(0);
-  const [terminalOpen, setTerminalOpen] = useState(false);
-  const [workspaceViewMode, setWorkspaceViewMode] = useState<"agent" | "split">("agent");
-  const [sidebarView, setSidebarView] = useState<SidebarView>("files");
-  const [sidebarSectionsOpen, setSidebarSectionsOpen] = useState({ primary: true, workspaces: true });
-  const [windowMaximized, setWindowMaximized] = useState(false);
-  const [workspaces, setWorkspaces] = useState<any[]>([]);
-  const [workspaceStats, setWorkspaceStats] = useState<Record<string, WorkspaceStats>>({});
-  const [expandedWorkspaces, setExpandedWorkspaces] = useState<Record<string, boolean>>({});
-  const [conversations, setConversations] = useState<{ [workspaceId: string]: Array<{ id: string, name: string }> }>({});
-  const [editingChatId, setEditingChatId] = useState<string | null>(null);
-  const [editingChatName, setEditingChatName] = useState("");
-  const loadedWorkspaceData = useRef(false);
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
-  const [activeConversationRequest, setActiveConversationRequest] = useState(0);
-  const [appMenuOpen, setAppMenuOpen] = useState(false);
-  const hydratedLayoutRootRef = useRef<string | null>(null);
+
+  // Hook-based state management
+  const { 
+    view, setView, sidebarView, sidebarSectionsOpen, setSidebarSectionsOpen,
+    windowMaximized, terminalOpen, setTerminalOpen, workspaceViewMode,
+    browserTabRequest, setBrowserTabRequest,
+    workspaceHomeRequest, setWorkspaceHomeRequest,
+    selectedFile, setSelectedFile,
+    selectedFileRequest, setSelectedFileRequest,
+    appMenuOpen, setAppMenuOpen,
+    toggleTerminal, toggleWorkspaceViewMode, toggleWindowMaximize,
+    openSidebarView, goHome, openSelectedFile, runMenuAction
+  } = useAppLayout(workspaceRoot);
+
+  const { auth, accountData, authSkipped, setAuthSkipped, logout } = useAppAuth();
+
+  const { 
+    workspaces, expandedWorkspaces, conversations, setConversations,
+    activeConversationId, setActiveConversationId,
+    activeConversationRequest, setActiveConversationRequest,
+    pendingAction, setPendingAction, cloneDialog, setCloneDialog,
+    editingChatId, setEditingChatId, editingChatName, setEditingChatName,
+    activeWorkspaceId, reloadWorkspaces, requestWorkspaceSwitch,
+    toggleWorkspace, openConversation, createChat, doClone, startOnboardingWorkspace,
+    openFolder, openFile, newEmptyWorkspace
+  } = useWorkspaces(workspaceRoot, setWorkspaceRoot, setView);
+
+  const { workspaceStats, updateCurrentWorkspaceStats } = useGitStatus(workspaces, workspaceRoot);
+
   const appMenuRef = useRef<HTMLDivElement | null>(null);
+
   const orderedWorkspaces = useMemo(() => {
     if (!workspaceRoot) return workspaces;
     const normalize = (path: string) => path.replace(/[\\/]+$/, "").toLowerCase();
@@ -98,389 +107,39 @@ export function App() {
     ];
   }, [workspaces, workspaceRoot]);
 
-  const activeWorkspaceId = useMemo(() => {
-    if (!workspaceRoot) return null;
-    const normalize = (path: string) => path.replace(/[\\/]+$/, "").toLowerCase();
-    return workspaces.find((ws) => normalize(ws.path) === normalize(workspaceRoot))?.id || null;
-  }, [workspaces, workspaceRoot]);
 
-  const handleConversationCreated = (id: string) => {
-    setActiveConversationId(id);
-    setActiveConversationRequest(c => c + 1);
-    void reloadWorkspaces();
-  };
 
-  const toggleTerminal = () => setTerminalOpen(!terminalOpen);
-  const toggleWorkspaceViewMode = () => setWorkspaceViewMode((mode) => (mode === "agent" ? "split" : "agent"));
-  const goHome = () => {
-    setView(workspaceRoot ? "workspace" : "onboarding");
-    setSelectedFile(null);
-    setActiveConversationId(null);
-    setWorkspaceHomeRequest((request) => request + 1);
-  };
-  const toggleWindowMaximize = async () => {
-    const isMaximized = await window.codegrey?.windowControls?.toggleMaximize?.();
-    if (typeof isMaximized === "boolean") setWindowMaximized(isMaximized);
-  };
 
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      const root = await window.codegrey?.workspace?.getRoot?.();
-      if (cancelled) return;
-      setWorkspaceRoot(root ?? null);
-      if (root) {
-        // Automatically track any opened workspace
-        const name = root.split(/[/\\]/).pop();
-        await window.codegrey?.brain?.trackWorkspace?.(root, name);
-        setView("workspace");
-      } else {
-        setView("onboarding");
-      }
-      setAppReady(true);
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    const close = (event: MouseEvent) => {
-      if (!appMenuRef.current?.contains(event.target as Node)) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (appMenuRef.current && !appMenuRef.current.contains(event.target as Node)) {
         setAppMenuOpen(false);
       }
     };
-    window.addEventListener("mousedown", close);
-    return () => window.removeEventListener("mousedown", close);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   useEffect(() => {
-    const onRefresh = () => {
-      void refreshCurrentWorkspaceStats();
-      void reloadWorkspaces();
-    };
-    window.addEventListener('codegrey:stats-refresh' as any, onRefresh);
-    return () => window.removeEventListener('codegrey:stats-refresh' as any, onRefresh);
-  }, [workspaceRoot]);
-
-  useEffect(() => {
-    const loadBrain = async () => {
-      const ws = await window.codegrey?.brain?.getWorkspaces?.() || [];
-      setWorkspaces(ws);
-      void refreshWorkspaceStats(ws);
-
-      // Auto-expand current workspace
-      if (workspaceRoot) {
-        const currentWs = ws.find((w: any) => w.path === workspaceRoot);
-        if (currentWs) {
-          setExpandedWorkspaces(prev => ({ ...prev, [currentWs.id]: true }));
-          const convs = await window.codegrey?.brain?.getConversations?.(currentWs.id) || [];
-          setConversations(prev => ({ ...prev, [currentWs.id]: convs }));
-        }
+    const handleContextMenu = (e: MouseEvent) => {
+      if (e.target instanceof HTMLElement && e.target.closest('.title-bar')) {
+        e.preventDefault();
+        (window as any).codegrey?.windowControls?.showTitleBarMenu();
       }
     };
-    loadBrain();
-  }, [workspaceRoot]);
-
-  useEffect(() => {
-    if (!workspaceRoot) return;
-    const layout = readWorkspaceLayout(workspaceRoot);
-    hydratedLayoutRootRef.current = workspaceRoot;
-    setWorkspaceViewMode(layout.viewMode);
-    setTerminalOpen(layout.terminalOpen);
-  }, [workspaceRoot]);
-
-  useEffect(() => {
-    if (!workspaceRoot || hydratedLayoutRootRef.current !== workspaceRoot) return;
-    const layout = readWorkspaceLayout(workspaceRoot);
-    writeWorkspaceLayout(workspaceRoot, {
-      ...layout,
-      terminalOpen,
-      viewMode: workspaceViewMode,
-    });
-  }, [workspaceRoot, terminalOpen, workspaceViewMode]);
-
-  const [pendingAction, setPendingAction] = useState<{
-    title: string;
-    description: string;
-    confirmLabel: string;
-    action: () => void;
-  } | null>(null);
-  const [cloneDialog, setCloneDialog] = useState<{ open: boolean; url: string; busy: boolean; error: string; progress: string[] }>({
-    open: false, url: "", busy: false, error: "", progress: [],
-  });
-
-  const requestWorkspaceSwitch = (path: string, name: string, action: () => void) => {
-    if (workspaceRoot === path) {
-      action();
-    } else {
-      setPendingAction({
-        title: "Switch Workspace?",
-        description: `Open ${name}? Your current terminal and tabs will be cleared.`,
-        confirmLabel: "Switch",
-        action,
-      });
-    }
-  };
-
-  const toggleWorkspace = async (ws: any) => {
-    const willOpen = !expandedWorkspaces[ws.id];
-    setExpandedWorkspaces(prev => ({ ...prev, [ws.id]: willOpen }));
-
-    if (willOpen && !conversations[ws.id]) {
-      const convs = await window.codegrey?.brain?.getConversations?.(ws.id) || [];
-      setConversations(prev => ({ ...prev, [ws.id]: convs }));
-    }
-  };
-
-  const openConversation = (ws: any, convId: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    requestWorkspaceSwitch(ws.path, ws.name, async () => {
-      const newRoot = await window.codegrey?.workspace?.openFolderByPath?.(ws.path);
-      if (newRoot) setWorkspaceRoot(newRoot);
-      setSelectedFile(null);
-      setActiveConversationId(convId);
-      setActiveConversationRequest((request) => request + 1);
-      setExpandedWorkspaces(prev => ({ ...prev, [ws.id]: true }));
-    });
-  };
-
-  const createChat = (ws: any, e: React.MouseEvent) => {
-    e.stopPropagation();
-    requestWorkspaceSwitch(ws.path, ws.name, async () => {
-      const newRoot = await window.codegrey?.workspace?.openFolderByPath?.(ws.path);
-      if (newRoot) setWorkspaceRoot(newRoot);
-
-      const newConv = await window.codegrey?.brain?.createConversation?.(ws.id, "New Chat");
-      const convs = await window.codegrey?.brain?.getConversations?.(ws.id) || [];
-      setConversations(prev => ({ ...prev, [ws.id]: convs }));
-      setExpandedWorkspaces(prev => ({ ...prev, [ws.id]: true }));
-      if (newConv) {
-        setSelectedFile(null);
-        setActiveConversationId(newConv.id);
-        setActiveConversationRequest((request) => request + 1);
-      }
-    });
-  };
-
-
-  useEffect(() => {
-    let cancelled = false;
-    void window.codegrey?.windowControls?.isMaximized?.().then((isMaximized) => {
-      if (!cancelled) setWindowMaximized(isMaximized);
-    });
-
-    const unsubscribe = window.codegrey?.windowControls?.onMaximizedChange?.((isMaximized) => {
-      setWindowMaximized(isMaximized);
-    });
-
-    return () => {
-      cancelled = true;
-      unsubscribe?.();
-    };
+    window.addEventListener('contextmenu', handleContextMenu);
+    return () => window.removeEventListener('contextmenu', handleContextMenu);
   }, []);
 
-  const openFolder = async () => {
-    const root = await window.codegrey?.workspace?.openFolder?.();
-    if (!root) return;
-    setWorkspaceRoot(root);
-    setSelectedFile(null);
-    setActiveConversationId(null);
-    setView("workspace");
-    void reloadWorkspaces();
-  };
+  const handleConversationCreated = useCallback(async (id: string) => {
+    if (!activeWorkspaceId) return;
+    const convs = await window.codegrey?.brain?.getConversations?.(activeWorkspaceId) || [];
+    setConversations(prev => ({ ...prev, [activeWorkspaceId]: convs }));
+    setActiveConversationId(id);
+    setActiveConversationRequest(r => r + 1);
+    void updateCurrentWorkspaceStats();
+  }, [activeWorkspaceId, setConversations, setActiveConversationId, setActiveConversationRequest, updateCurrentWorkspaceStats]);
 
-  const openFile = async () => {
-    const result = await window.codegrey?.workspace?.openFile?.();
-    if (!result) return;
-    setWorkspaceRoot(result.root);
-    setSelectedFile(result.filePath);
-    setSelectedFileRequest((request) => request + 1);
-    setActiveConversationId(null);
-    setView("workspace");
-    void reloadWorkspaces();
-  };
-
-  const newEmptyWorkspace = async () => {
-    await window.codegrey?.workspace?.clearRoot?.();
-    setWorkspaceRoot(null);
-    setSelectedFile(null);
-    setActiveConversationId(null);
-    setView("workspace");
-  };
-
-  const runMenuAction = (action: () => void | Promise<void>) => {
-    setAppMenuOpen(false);
-    void action();
-  };
-
-  const openSidebarView = (nextView: SidebarView) => {
-    setSidebarView(nextView);
-    if (nextView === "mcp") {
-      setView("mcp-settings");
-      return;
-    }
-    if (nextView === "knowledge") {
-      setView("knowledge");
-      return;
-    }
-    if (view !== "workspace") {
-      setView("workspace");
-    }
-  };
-
-  const openSelectedFile = (path: string) => {
-    setActiveConversationId(null);
-    setSelectedFile(path);
-    setSelectedFileRequest((request) => request + 1);
-    // Close any overlay page so the file is immediately visible
-    if (view !== "workspace" && view !== "onboarding") {
-      setView("workspace");
-    }
-  };
-
-  const basename = (filePath: string) => filePath.split(/[/\\]/).filter(Boolean).pop() || filePath;
-
-  const createEditorFile = async () => {
-    if (!workspaceRoot) return;
-    const entries = await window.codegrey?.workspace?.listDir?.(workspaceRoot) || [];
-    const names = new Set(entries.map((entry) => entry.name.toLowerCase()));
-    let name = "New File";
-    for (let index = 2; names.has(name.toLowerCase()); index += 1) {
-      name = `New File ${index}`;
-    }
-    const result = await window.codegrey?.workspace?.createEntry?.(workspaceRoot, name, false);
-    if (!result?.ok || !result.path) return;
-    window.dispatchEvent(new CustomEvent("codegrey:explorer-refresh"));
-    openSelectedFile(result.path);
-    await refreshCurrentWorkspaceStats();
-  };
-
-  const reloadWorkspaces = async () => {
-    const ws = await window.codegrey?.brain?.getWorkspaces?.() || [];
-    setWorkspaces(ws);
-    void refreshWorkspaceStats(ws);
-    return ws;
-  };
-
-  const updateCurrentWorkspaceStats = (files: Array<{ index: string; workingTree: string }>) => {
-    if (!workspaceRoot) return;
-    const stats = files.reduce(
-      (acc, file) => {
-        if (file.index === "?" || file.index === "A" || file.workingTree === "A") acc.added += 1;
-        if (file.index === "D" || file.workingTree === "D") acc.deleted += 1;
-        return acc;
-      },
-      { added: 0, deleted: 0 }
-    );
-    setWorkspaceStats((prev) => ({ ...prev, [workspaceRoot]: stats }));
-  };
-
-  const refreshCurrentWorkspaceStats = async () => {
-    if (!workspaceRoot) return;
-    const status = await window.codegrey?.git?.status?.();
-    updateCurrentWorkspaceStats(status?.ok ? status.files : []);
-  };
-
-  const statsFromFiles = (files: Array<{ index: string; workingTree: string }>) =>
-    files.reduce(
-      (acc, file) => {
-        if (file.index === "?" || file.index === "A" || file.workingTree === "A") acc.added += 1;
-        if (file.index === "D" || file.workingTree === "D") acc.deleted += 1;
-        return acc;
-      },
-      { added: 0, deleted: 0 }
-    );
-
-  const refreshWorkspaceStats = async (items = workspaces) => {
-    if (!window.codegrey?.git?.statusForPath) return;
-    const entries = await Promise.all(
-      items.map(async (ws) => {
-        const status = await window.codegrey?.git?.statusForPath?.(ws.path);
-        return [ws.path, statsFromFiles(status?.ok ? status.files : [])] as const;
-      })
-    );
-    setWorkspaceStats((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
-  };
-
-  useEffect(() => {
-    void refreshCurrentWorkspaceStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceRoot]);
-
-  const cloneRepository = async (repoUrl = "") => {
-    if (repoUrl.trim()) {
-      // Called with a URL directly (e.g. from onboarding) — skip dialog
-      const result = await window.codegrey?.workspace?.cloneRepo?.(repoUrl.trim());
-      if (!result?.ok || !result.path) {
-        if (result?.error) {
-          setPendingAction({ title: "Clone Failed", description: result.error, confirmLabel: "OK", action: () => undefined });
-        }
-        return null;
-      }
-      setWorkspaceRoot(result.path);
-      setSelectedFile(null);
-      setActiveConversationId(null);
-      setSidebarView("files");
-      setView("workspace");
-      await reloadWorkspaces();
-      return result.path;
-    }
-    // No URL supplied — open the custom clone dialog
-    setCloneDialog({ open: true, url: "", busy: false, error: "", progress: [] });
-    return null;
-  };
-
-  const doClone = async (url: string) => {
-    if (!url.trim()) { setCloneDialog(d => ({ ...d, error: "Please enter a repository URL" })); return; }
-    setCloneDialog(d => ({ ...d, busy: true, error: "", progress: [] }));
-    // Subscribe to streaming progress
-    const unsub = window.codegrey?.workspace?.onCloneProgress?.((msg: { line: string }) => {
-      setCloneDialog(d => ({ ...d, progress: [...d.progress.slice(-30), msg.line] }));
-    });
-    const result = await window.codegrey?.workspace?.cloneRepo?.(url.trim());
-    unsub?.();
-    if (!result?.ok || !result.path) {
-      setCloneDialog(d => ({ ...d, busy: false, error: result?.error || "Clone failed" }));
-      return;
-    }
-    setCloneDialog({ open: false, url: "", busy: false, error: "", progress: [] });
-    setWorkspaceRoot(result.path);
-    setSelectedFile(null);
-    setActiveConversationId(null);
-    setSidebarView("files");
-    setView("workspace");
-    await reloadWorkspaces();
-  };
-
-  const startOnboardingWorkspace = async (mode: WorkspaceMode, options?: { repoUrl?: string }) => {
-    if (mode === "local") {
-      const root = await window.codegrey?.workspace?.openFolder?.();
-      if (!root) return;
-      setWorkspaceRoot(root);
-      setSelectedFile(null);
-      setActiveConversationId(null);
-      setView("workspace");
-      return;
-    }
-
-    if (mode === "blank") {
-      await window.codegrey?.workspace?.clearRoot?.();
-      setWorkspaceRoot(null);
-      setSelectedFile(null);
-      setActiveConversationId(null);
-      setView("workspace");
-      return;
-    }
-
-    if (mode === "git") {
-      await cloneRepository(options?.repoUrl ?? "");
-      return;
-    }
-
-    setView("workspace");
-  };
 
   useEffect(() => {
     const tooltip = document.createElement('div');
@@ -542,7 +201,7 @@ export function App() {
   }, []);
 
   return (
-    !appReady ? (
+    !auth.ready ? (
       <div className="app-frame app-boot" data-view="boot" />
     ) : (
     <div className="app-frame" data-view={view}>
@@ -581,11 +240,14 @@ export function App() {
                 <FolderOpen size={15} />
                 <span>Open Folder...</span>
               </button>
-              <button type="button" role="menuitem" onClick={() => runMenuAction(openFile)}>
+              <button type="button" role="menuitem" onClick={() => runMenuAction(async () => { 
+                const path = await openFile();
+                if (path) openSelectedFile(path);
+              })}>
                 <File size={15} />
                 <span>Open File...</span>
               </button>
-              <button type="button" role="menuitem" onClick={() => runMenuAction(async () => { await cloneRepository(); })}>
+              <button type="button" role="menuitem" onClick={() => runMenuAction(() => setCloneDialog(d => ({ ...d, open: true })))}>
                 <GitPullRequest size={15} />
                 <span>Clone Repository...</span>
               </button>
@@ -663,12 +325,12 @@ export function App() {
                   onSelectFile={openSelectedFile}
                   onChanged={() => {
                     void reloadWorkspaces();
-                    void refreshCurrentWorkspaceStats();
+                    void updateCurrentWorkspaceStats();
                   }}
                   onRequestDelete={(entry, onDeleted) => {
                     setPendingAction({
                       title: `Delete ${entry.isDir ? "Folder" : "File"}?`,
-                      description: `Are you sure you want to delete "${entry.name || basename(entry.path)}"? This cannot be undone.`,
+                      description: `Are you sure you want to delete "${entry.name}"? This cannot be undone.`,
                       confirmLabel: "Delete",
                       action: () => void onDeleted(),
                     });
@@ -680,7 +342,7 @@ export function App() {
                   <button className="sidebar-btn sidebar-btn-primary" onClick={openFolder}>
                     Open a folder
                   </button>
-                  <button className="sidebar-btn sidebar-btn-secondary" onClick={() => void cloneRepository()}>
+                  <button className="sidebar-btn sidebar-btn-secondary" onClick={() => setCloneDialog(d => ({ ...d, open: true }))}>
                     Clone a Git repo
                   </button>
                 </>

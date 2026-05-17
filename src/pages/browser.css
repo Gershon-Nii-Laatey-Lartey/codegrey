@@ -1,0 +1,122 @@
+/* src/pages/browser.css */
+
+.browser-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--bg);
+  overflow: hidden;
+  position: relative;
+  animation: fadeIn 240ms ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.browser-header {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  background: var(--bg);
+  border-bottom: 0;
+  flex-shrink: 0;
+}
+
+.browser-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.browser-nav-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-strong);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+
+.browser-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--white);
+}
+
+.browser-address-bar {
+  flex: 1;
+  max-width: 480px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 0;
+  border-radius: 12px;
+  padding: 0 14px;
+  transition: all 200ms ease;
+}
+
+.browser-address-bar:focus-within {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.browser-search-icon {
+  color: var(--muted-strong);
+  flex-shrink: 0;
+}
+
+.browser-address-input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  width: 100%;
+}
+
+.browser-window-actions {
+  display: flex;
+  align-items: center;
+}
+
+.browser-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-strong);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+
+.browser-close-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.browser-viewport {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: #fff;
+}
+
+.browser-webview {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}

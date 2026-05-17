@@ -1,0 +1,441 @@
+/* src/pages/accounts.css */
+
+.acct-m-page .settings-content {
+  width: min(100%, 880px);
+  padding-top: 22px;
+}
+
+.acct-m-page .settings-close-btn {
+  width: auto;
+  min-width: 48px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+.acct-m-action-btn {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: #1d1d1d;
+  color: var(--muted-strong);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  width: auto;
+  min-width: 48px;
+  transition: all 150ms ease;
+}
+
+.acct-m-action-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.acct-m-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.acct-m-container {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.acct-m-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 0.68fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.acct-m-profile,
+.acct-m-plan-panel,
+.acct-m-card-premium {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: linear-gradient(180deg, #1a1a1a 0%, #131313 100%);
+  border-radius: 16px;
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.03),
+    0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.acct-m-profile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+}
+
+.acct-m-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  overflow: hidden;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: var(--muted-strong);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.acct-m-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.acct-m-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.acct-m-name {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 680;
+  line-height: 1.2;
+}
+
+.acct-m-email {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.acct-m-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(116, 168, 255, 0.28);
+  background: rgba(116, 168, 255, 0.09);
+  color: #9cc3ff;
+  flex: 0 0 auto;
+}
+
+.acct-m-badge[data-plan="free"] {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted-strong);
+}
+
+.acct-m-badge-label {
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.acct-m-plan-panel {
+  min-width: 0;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.acct-m-plan-kicker,
+.acct-m-last-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: capitalize;
+}
+
+.acct-m-plan-title {
+  margin-top: 7px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 680;
+}
+
+.acct-m-plan-sub {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.acct-m-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.acct-m-section-title {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.acct-m-section-title p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.acct-m-label {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.acct-m-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.acct-m-tile {
+  min-width: 0;
+  min-height: 84px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.015);
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.acct-m-tile:hover {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.acct-m-tile-label {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  font-size: 9.5px;
+  font-weight: 550;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.acct-m-tile-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-strong);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 550;
+  line-height: 1.1;
+  margin: 2px 0;
+}
+
+.acct-m-tile-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  opacity: 0.75;
+  font-size: 10px;
+}
+
+.acct-m-card-premium {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  padding: 13px 14px;
+}
+
+.acct-m-card-content {
+  min-width: 0;
+}
+
+.acct-m-card-title {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 680;
+}
+
+.acct-m-card-subtext {
+  min-width: 0;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.acct-m-card-btn,
+.acct-m-primary-btn {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted-strong);
+  padding: 0 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.acct-m-card-btn:hover,
+.acct-m-primary-btn:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.085);
+  color: var(--text);
+}
+
+.acct-m-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.acct-m-signout {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 11px;
+  font-size: 11.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.acct-m-signout:hover {
+  border-color: rgba(239, 68, 68, 0.22);
+  background: rgba(239, 68, 68, 0.07);
+  color: #ff8d8d;
+}
+
+.acct-m-version {
+  color: #686864;
+  font-size: 11px;
+}
+
+.acct-m-loading,
+.acct-m-signed-out {
+  min-height: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+  color: var(--muted);
+}
+
+.acct-m-loading {
+  gap: 10px;
+  font-size: 13px;
+}
+
+.acct-m-signed-out {
+  gap: 10px;
+}
+
+.acct-m-signed-out-mark {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: #8b8b84;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #111111;
+  font-size: 20px;
+  font-weight: 760;
+}
+
+.acct-m-signed-out h2 {
+  margin: 8px 0 0;
+  color: var(--text);
+  font-size: 19px;
+  font-weight: 720;
+}
+
+.acct-m-signed-out p {
+  max-width: 320px;
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.acct-m-primary-btn {
+  min-width: 92px;
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+.acct-m-primary-btn:hover {
+  background: #ffffff;
+  color: var(--bg);
+}
+
+@media (max-width: 760px) {
+  .acct-m-hero {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .acct-m-profile {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 520px) {
+  .acct-m-page .settings-content {
+    padding: 16px;
+  }
+
+  .acct-m-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .acct-m-section-title,
+  .acct-m-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
