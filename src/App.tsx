@@ -202,7 +202,10 @@ export function App() {
 
   return (
     !auth.ready ? (
-      <div className="app-frame app-boot" data-view="boot" />
+      <div className="app-frame app-boot" data-view="boot" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", width: "100%", background: "#0f0f0f", gap: "16px" }}>
+        <div className="spin" style={{ width: "24px", height: "24px", border: "2px solid rgba(255, 255, 255, 0.06)", borderTopColor: "rgba(255, 255, 255, 0.5)", borderRadius: "50%" }} />
+        <span style={{ color: "var(--muted)", fontSize: "11px", fontWeight: 600, letterSpacing: "0.1em" }}>CODEGREY</span>
+      </div>
     ) : (
     <div className="app-frame" data-view={view}>
       {view !== "onboarding" && (
@@ -223,19 +226,6 @@ export function App() {
           </div>
           {appMenuOpen ? (
             <div className="app-menu app-menu-fixed" role="menu" ref={appMenuRef as any}>
-              <button type="button" role="menuitem" onClick={() => runMenuAction(newEmptyWorkspace)}>
-                <FilePlusIcon />
-                <span>New Empty Workspace</span>
-              </button>
-              <button type="button" role="menuitem" onClick={() => runMenuAction(() => window.codegrey?.windowControls?.newWindow?.())}>
-                <PanelTopOpen size={15} />
-                <span>New Window</span>
-              </button>
-              <button type="button" role="menuitem" onClick={() => runMenuAction(() => window.codegrey?.windowControls?.newEmptyWindow?.())}>
-                <PanelTopOpen size={15} />
-                <span>New Empty Window</span>
-              </button>
-              <div className="app-menu-separator" />
               <button type="button" role="menuitem" onClick={() => runMenuAction(openFolder)}>
                 <FolderOpen size={15} />
                 <span>Open Folder...</span>

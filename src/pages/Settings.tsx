@@ -1,4 +1,4 @@
-import { Check, Eye, EyeOff, KeyRound, RotateCcw, Save, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Eye, EyeOff, KeyRound, RotateCcw, Save, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   DEFAULT_AI_SETTINGS,
@@ -13,6 +13,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
   const [saving, setSaving] = useState(false);
   const [testState, setTestState] = useState<"idle" | "testing" | "ok" | "error">("idle");
   const [testError, setTestError] = useState("");
+  const [byokExpanded, setByokExpanded] = useState(false);
 
   const preset = useMemo(() => PROVIDER_PRESETS[settings.providerId], [settings.providerId]);
   const providerIds = Object.keys(PROVIDER_PRESETS) as ProviderId[];
@@ -21,7 +22,10 @@ export function Settings({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     let cancelled = false;
     void window.codegrey?.settings?.get().then((loaded) => {
-      if (!cancelled && loaded) setSettings({ ...DEFAULT_AI_SETTINGS, ...loaded });
+      if (!cancelled && loaded) {
+        setSettings({ ...DEFAULT_AI_SETTINGS, ...loaded });
+        setByokExpanded(!loaded.preferPlanModels);
+      }
     });
     return () => {
       cancelled = true;
@@ -84,7 +88,13 @@ export function Settings({ onBack }: { onBack: () => void }) {
             className="settings-toggle-row"
             type="button"
             data-enabled={settings.preferPlanModels}
-            onClick={() => void persist({ preferPlanModels: !settings.preferPlanModels })}
+            onClick={() => {
+              const nextVal = !settings.preferPlanModels;
+              void persist({ preferPlanModels: nextVal });
+              if (nextVal) {
+                setByokExpanded(false);
+              }
+            }}
           >
             <span className="settings-toggle-dot" />
             <span>
@@ -97,90 +107,166 @@ export function Settings({ onBack }: { onBack: () => void }) {
           </button>
         </section>
 
-        <section className="settings-section" data-disabled={settings.preferPlanModels}>
+        <section className="settings-section">
           <div className="settings-section-title">
-            <h2>BYOK Provider</h2>
-            <span>{saving ? "Saving..." : "Saved locally"}</span>
+            <button
+              type="button"
+              className="settings-collapse-trigger"
+              onClick={() => setByokExpanded(!byokExpanded)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "transparent",
+                border: 0,
+                padding: 0,
+                margin: 0,
+                color: "inherit",
+                cursor: "pointer",
+                textAlign: "left",
+                opacity: settings.preferPlanModels ? 0.5 : 1,
+                transition: "opacity 150ms ease",
+              }}
+            >
+              <h2 style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                BYOK Provider
+                {byokExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </h2>
+            </button>
+            <span style={{ opacity: settings.preferPlanModels ? 0.5 : 1 }}>
+              {saving ? "Saving..." : "Saved locally"}
+            </span>
           </div>
-          <div className="settings-provider-grid" role="radiogroup" aria-label="AI provider">
-            {providerIds.map((id) => (
-              <button
-                key={id}
-                type="button"
-                className="provider-choice"
-                data-selected={settings.providerId === id}
-                onClick={() => selectProvider(id)}
+          {byokExpanded && (
+            <>
+              <div
+                className="settings-provider-grid"
+                role="radiogroup"
+                aria-label="AI provider"
+                style={{ opacity: settings.preferPlanModels ? 0.45 : 1, pointerEvents: settings.preferPlanModels ? "none" : "auto" }}
               >
-                <span>{PROVIDER_PRESETS[id].label}</span>
-              </button>
-            ))}
-          </div>
-          <div className="settings-grid">
-            <label className="settings-field">
-              <span>Base URL</span>
-              <input
-                value={settings.baseUrl}
-                disabled={settings.providerId !== "custom"}
-                onChange={(event) => setSettings((prev) => ({ ...prev, baseUrl: event.target.value }))}
-                onBlur={() => void persist({ baseUrl: settings.baseUrl })}
-                placeholder={preset.baseUrl || "https://provider.example/v1"}
-              />
-            </label>
-          </div>
+                {providerIds.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className="provider-choice"
+                    data-selected={settings.providerId === id}
+                    disabled={settings.preferPlanModels}
+                    onClick={() => selectProvider(id)}
+                  >
+                    <span>{PROVIDER_PRESETS[id].label}</span>
+                  </button>
+                ))}
+              </div>
+              <div
+                className="settings-grid"
+                style={{ opacity: settings.preferPlanModels ? 0.45 : 1, pointerEvents: settings.preferPlanModels ? "none" : "auto" }}
+              >
+                <label className="settings-field">
+                  <span>Base URL</span>
+                  <input
+                    value={settings.baseUrl}
+                    disabled={settings.preferPlanModels || settings.providerId !== "custom"}
+                    onChange={(event) => setSettings((prev) => ({ ...prev, baseUrl: event.target.value }))}
+                    onBlur={() => void persist({ baseUrl: settings.baseUrl })}
+                    placeholder={preset.baseUrl || "https://provider.example/v1"}
+                  />
+                </label>
+              </div>
+            </>
+          )}
         </section>
 
-        <section className="settings-section" data-disabled={settings.preferPlanModels}>
-          <div className="settings-section-title">
-            <h2>API Key</h2>
-          </div>
-          <div className="api-key-row">
-            <div className="settings-field settings-field-grow">
-              <span>Key</span>
-              <div className="secret-input">
-                <KeyRound size={14} />
-                <input
-                  value={settings.apiKey}
-                  type={showKey ? "text" : "password"}
-                  onChange={(event) => setSettings((prev) => ({ ...prev, apiKey: event.target.value }))}
-                  onBlur={() => void persist({ apiKey: settings.apiKey })}
-                  placeholder={settings.providerId === "ollama" ? "Optional for local Ollama" : "Enter provider API key"}
-                />
-                <button type="button" onClick={() => setShowKey((shown) => !shown)} aria-label="Toggle API key visibility">
-                  {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+        {byokExpanded && (
+          <>
+            <section className="settings-section">
+              <div className="settings-section-title" style={{ opacity: settings.preferPlanModels ? 0.5 : 1 }}>
+                <h2>API Key</h2>
+              </div>
+              <div
+                className="api-key-row"
+                style={{ opacity: settings.preferPlanModels ? 0.45 : 1, pointerEvents: settings.preferPlanModels ? "none" : "auto" }}
+              >
+                <div className="settings-field settings-field-grow">
+                  <span>Key</span>
+                  <div className="secret-input">
+                    <KeyRound size={14} />
+                    <input
+                      value={settings.apiKey}
+                      type={showKey ? "text" : "password"}
+                      disabled={settings.preferPlanModels}
+                      onChange={(event) => setSettings((prev) => ({ ...prev, apiKey: event.target.value }))}
+                      onBlur={() => void persist({ apiKey: settings.apiKey })}
+                      placeholder={settings.providerId === "ollama" ? "Optional for local Ollama" : "Enter provider API key"}
+                    />
+                    <button
+                      type="button"
+                      disabled={settings.preferPlanModels}
+                      onClick={() => setShowKey((shown) => !shown)}
+                      aria-label="Toggle API key visibility"
+                    >
+                      {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+                <button
+                  className="settings-icon-btn"
+                  type="button"
+                  disabled={settings.preferPlanModels}
+                  onClick={() => void persist({ apiKey: settings.apiKey })}
+                  aria-label="Save API key"
+                >
+                  <Save size={14} />
+                </button>
+                <button
+                  className="settings-icon-btn"
+                  type="button"
+                  disabled={settings.preferPlanModels}
+                  onClick={() => void persist({ apiKey: "" })}
+                  aria-label="Clear API key"
+                >
+                  <RotateCcw size={14} />
+                </button>
+                <button
+                  className="settings-primary-btn"
+                  type="button"
+                  onClick={testConnection}
+                  disabled={settings.preferPlanModels || testState === "testing"}
+                >
+                  {testState === "ok" ? <Check size={14} /> : null}
+                  {testState === "testing" ? "Testing" : "Test"}
                 </button>
               </div>
-            </div>
-            <button className="settings-icon-btn" type="button" onClick={() => void persist({ apiKey: settings.apiKey })} aria-label="Save API key">
-              <Save size={14} />
-            </button>
-            <button className="settings-icon-btn" type="button" onClick={() => void persist({ apiKey: "" })} aria-label="Clear API key">
-              <RotateCcw size={14} />
-            </button>
-            <button className="settings-primary-btn" type="button" onClick={testConnection} disabled={testState === "testing"}>
-              {testState === "ok" ? <Check size={14} /> : null}
-              {testState === "testing" ? "Testing" : "Test"}
-            </button>
-          </div>
-          {testState === "error" ? <p className="settings-error">{testError}</p> : null}
-          {testState === "ok" ? <p className="settings-ok">Connection succeeded.</p> : null}
-        </section>
+              {testState === "error" ? (
+                <p className="settings-error" style={{ opacity: settings.preferPlanModels ? 0.5 : 1 }}>{testError}</p>
+              ) : null}
+              {testState === "ok" ? (
+                <p className="settings-ok" style={{ opacity: settings.preferPlanModels ? 0.5 : 1 }}>Connection succeeded.</p>
+              ) : null}
+            </section>
 
-        <section className="settings-section" data-disabled={settings.preferPlanModels}>
-          <div className="settings-section-title">
-            <h2>Model</h2>
-          </div>
-          <div className="settings-grid">
-            <label className="settings-field">
-              <span>Model name</span>
-              <input
-                value={settings.model}
-                onChange={(event) => setSettings((prev) => ({ ...prev, model: event.target.value }))}
-                onBlur={() => void persist({ model: settings.model })}
-                placeholder={preset.placeholder}
-              />
-            </label>
-          </div>
-        </section>
+            <section className="settings-section">
+              <div className="settings-section-title" style={{ opacity: settings.preferPlanModels ? 0.5 : 1 }}>
+                <h2>Model</h2>
+              </div>
+              <div
+                className="settings-grid"
+                style={{ opacity: settings.preferPlanModels ? 0.45 : 1, pointerEvents: settings.preferPlanModels ? "none" : "auto" }}
+              >
+                <label className="settings-field">
+                  <span>Model name</span>
+                  <input
+                    value={settings.model}
+                    disabled={settings.preferPlanModels}
+                    onChange={(event) => setSettings((prev) => ({ ...prev, model: event.target.value }))}
+                    onBlur={() => void persist({ model: settings.model })}
+                    placeholder={preset.placeholder}
+                  />
+                </label>
+              </div>
+            </section>
+          </>
+        )}
 
         <section className="settings-section">
           <div className="settings-section-title">

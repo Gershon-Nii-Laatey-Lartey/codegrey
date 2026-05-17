@@ -1962,7 +1962,7 @@ button {
   justify-content: center;
   gap: 7px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   background: #1d1d1d;
   color: var(--muted-strong);
   font-size: 12px;
@@ -2111,7 +2111,7 @@ button {
   gap: 12px;
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 16px;
   background: #171717;
   color: var(--text);
   text-align: left;
@@ -2183,7 +2183,7 @@ button {
 .settings-close-btn {
   width: 32px;
   height: 32px;
-  border-radius: 9px;
+  border-radius: 12px;
   background: transparent;
 }
 
@@ -2247,7 +2247,7 @@ button {
   height: 34px;
   min-width: 0;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.035);
   color: var(--muted);
   cursor: pointer;
@@ -2274,7 +2274,7 @@ button {
 .settings-field input {
   height: 36px;
   border-color: rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.025);
   font-size: 12px;
   font-weight: 520;
@@ -2297,7 +2297,7 @@ button {
 .secret-input {
   height: 36px;
   border-color: rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.025);
 }
 
@@ -2307,7 +2307,7 @@ button {
   display: grid;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.035);
   color: var(--muted);
   cursor: pointer;
@@ -2324,7 +2324,7 @@ button {
 .settings-primary-btn {
   height: 36px;
   min-width: 72px;
-  border-radius: 8px;
+  border-radius: 12px;
   border-color: rgba(255, 255, 255, 0.12);
   background: var(--white);
   color: #111111;
@@ -2340,7 +2340,7 @@ button {
 .temperature-control button {
   height: 36px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.035);
   color: var(--muted);
   cursor: pointer;
@@ -2359,7 +2359,7 @@ button {
   min-height: 56px;
   padding: 10px 11px;
   border-color: rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.025);
 }
 

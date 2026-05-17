@@ -529,6 +529,14 @@ function createWindow() {
     writeWindowState(win);
   });
 
+  win.webContents.on("console-message", (event, level, message, line, sourceId) => {
+    console.log(`[Renderer Console] ${message} (${path.basename(sourceId || "")}:${line})`);
+  });
+
+  win.webContents.on("did-fail-load", (event, errorCode, errorDescription, validatedURL) => {
+    console.error(`[Renderer Load Failure] Failed to load: ${validatedURL}. Error: ${errorDescription} (${errorCode})`);
+  });
+
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
@@ -545,28 +553,28 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(async () => {
+app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
 
-  try {
-    backendServer = await startBackendServer();
-  } catch (err) {
+  startBackendServer().then(server => {
+    backendServer = server;
+  }).catch(err => {
     if (err?.code === "EADDRINUSE") {
       console.warn("[Codegrey] AI backend port is already in use; assuming an existing backend is running.");
     } else {
       console.error("[Codegrey] Failed to start AI backend:", err);
     }
-  }
+  });
 
-  try {
-    mcpServer = await startMcpServer();
-  } catch (err) {
+  startMcpServer().then(server => {
+    mcpServer = server;
+  }).catch(err => {
     if (err?.code === "EADDRINUSE") {
       console.warn("[Codegrey] MCP backend port is already in use; assuming an existing backend is running.");
     } else {
       console.error("[Codegrey] Failed to start MCP backend:", err);
     }
-  }
+  });
 
   workspaceRoot = (() => {
     const appState = readAppState();
